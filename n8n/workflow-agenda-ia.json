@@ -1,0 +1,96 @@
+{
+  "name": "Agenda IA - Flujo base (Postman -> n8n -> IA)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chat-agenda",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook1",
+      "name": "Webhook Postman",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "chat-agenda-webhook"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.texto }}",
+        "options": {
+          "systemMessage": "Eres el agente de WhatsApp de una clinica en Ecuador. Por ahora tu unica tarea es entender el contexto de la conversacion (recuerdas los mensajes anteriores de este mismo paciente) y responder identificando, en una frase corta y en tono cercano ecuatoriano, que necesita el paciente. Ejemplos: si pregunta cuanto cuesta algo o que servicios hay, responde algo como 'Entiendo, esta preguntando por servicios y precios, deberiamos consultar el catalogo del profesional.' Si saluda nomas, responde el saludo y pregunta en que le puedes ayudar. Si quiere agendar, di que esta pidiendo agendar una cita. No inventes precios, horarios ni datos todavia: solo identifica la intencion, no hay backend conectado aun."
+        }
+      },
+      "id": "agent1",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [520, 300]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-1.5-flash"
+      },
+      "id": "gemini1",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [400, 520]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.body.usuario_id }}"
+      },
+      "id": "memory1",
+      "name": "Memoria de conversacion",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [560, 520]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.output }}",
+        "options": {}
+      },
+      "id": "respond1",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [800, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Postman": {
+      "main": [
+        [
+          { "node": "AI Agent", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          { "node": "AI Agent", "type": "ai_languageModel", "index": 0 }
+        ]
+      ]
+    },
+    "Memoria de conversacion": {
+      "ai_memory": [
+        [
+          { "node": "AI Agent", "type": "ai_memory", "index": 0 }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          { "node": "Respond to Webhook", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  }
+}
