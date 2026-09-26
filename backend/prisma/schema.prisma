@@ -1,0 +1,449 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================
+// ENUMS
+// =====================================================
+
+enum DiaSemana {
+  LUNES
+  MARTES
+  MIERCOLES
+  JUEVES
+  VIERNES
+  SABADO
+  DOMINGO
+}
+
+enum TipoExcepcionHorario {
+  BLOQUEO
+  DISPONIBILIDAD_EXTRA
+}
+
+enum EstadoCita {
+  RESERVA_TEMPORAL
+  PENDIENTE_PAGO
+  CONFIRMADA
+  ATENDIDA
+  CANCELADA
+  NO_ASISTIO
+  EXPIRADA
+}
+
+enum MetodoPago {
+  TRANSFERENCIA
+  EFECTIVO
+  PASARELA
+}
+
+enum EstadoPago {
+  PENDIENTE
+  COMPROBANTE_RECIBIDO
+  EN_CONCILIACION
+  CONFIRMADO
+  RECHAZADO
+  REEMBOLSADO
+}
+
+enum EstadoProcesamientoComprobante {
+  RECIBIDO
+  PROCESADO
+  ERROR
+}
+
+enum OrigenTransaccionBancaria {
+  EMAIL
+  API
+  PASARELA
+  MANUAL
+}
+
+enum EstadoConciliacion {
+  PENDIENTE
+  COINCIDENCIA_AUTOMATICA
+  REVISION_MANUAL
+  APROBADA_MANUALMENTE
+  RECHAZADA
+}
+
+// =====================================================
+// ORGANIZACIONES
+// =====================================================
+
+model Organizacion {
+  id              Int     @id @default(autoincrement())
+  codigo          String  @unique @db.VarChar(50)
+  nombre          String  @db.VarChar(150)
+  nombreComercial String? @map("nombre_comercial") @db.VarChar(150)
+
+  telefono String? @db.VarChar(30)
+  email    String? @db.VarChar(150)
+
+  zonaHoraria String @default("America/Guayaquil") @map("zona_horaria") @db.VarChar(80)
+
+  activo Boolean @default(true)
+
+  fechaCreacion      DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion") @db.Timestamptz(6)
+
+  profesionales          Profesional[]
+  clientes               Cliente[]
+  servicios              Servicio[]
+  citas                  Cita[]
+  pagos                  Pago[]
+  transaccionesBancarias TransaccionBancaria[]
+
+  @@map("organizaciones")
+}
+
+// =====================================================
+// PROFESIONALES
+// =====================================================
+
+model Profesional {
+  id             Int @id @default(autoincrement())
+  organizacionId Int @map("organizacion_id")
+
+  codigo String @db.VarChar(50)
+
+  nombre   String  @db.VarChar(100)
+  apellido String? @db.VarChar(100)
+
+  telefono String? @db.VarChar(30)
+  email    String? @db.VarChar(150)
+
+  tipoProfesional String? @map("tipo_profesional") @db.VarChar(100)
+  descripcion     String? @db.Text
+
+  zonaHoraria String? @map("zona_horaria") @db.VarChar(80)
+
+  intervaloAgendaMinutos Int @default(30) @map("intervalo_agenda_minutos")
+
+  activo Boolean @default(true)
+
+  fechaCreacion      DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion") @db.Timestamptz(6)
+
+  organizacion Organizacion @relation(fields: [organizacionId], references: [id])
+
+  servicios   ProfesionalServicio[]
+  horarios    HorarioProfesional[]
+  excepciones ExcepcionHorario[]
+  citas       Cita[]
+
+  @@unique([organizacionId, codigo])
+  @@index([organizacionId])
+  @@map("profesionales")
+}
+
+// =====================================================
+// CLIENTES
+// =====================================================
+
+model Cliente {
+  id             Int @id @default(autoincrement())
+  organizacionId Int @map("organizacion_id")
+
+  nombre   String  @db.VarChar(100)
+  apellido String? @db.VarChar(100)
+
+  telefono  String  @db.VarChar(30)
+  email     String? @db.VarChar(150)
+  direccion String? @db.VarChar(300)
+
+  activo Boolean @default(true)
+
+  fechaCreacion      DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion") @db.Timestamptz(6)
+
+  organizacion Organizacion @relation(fields: [organizacionId], references: [id])
+
+  citas Cita[]
+
+  @@unique([organizacionId, telefono])
+  @@index([organizacionId])
+  @@map("clientes")
+}
+
+// =====================================================
+// SERVICIOS
+// =====================================================
+
+model Servicio {
+  id             Int @id @default(autoincrement())
+  organizacionId Int @map("organizacion_id")
+
+  codigo String @db.VarChar(80)
+
+  nombre      String  @db.VarChar(150)
+  descripcion String? @db.Text
+
+  precio          Decimal @db.Decimal(10, 2)
+  duracionMinutos Int     @map("duracion_minutos")
+
+  requierePagoPrevio Boolean  @default(false) @map("requiere_pago_previo")
+  porcentajeAnticipo Decimal? @map("porcentaje_anticipo") @db.Decimal(5, 2)
+
+  activo Boolean @default(true)
+
+  fechaCreacion      DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion") @db.Timestamptz(6)
+
+  organizacion Organizacion @relation(fields: [organizacionId], references: [id])
+
+  profesionales ProfesionalServicio[]
+  citas         Cita[]
+
+  @@unique([organizacionId, codigo])
+  @@index([organizacionId])
+  @@map("servicios")
+}
+
+// =====================================================
+// PROFESIONALES <-> SERVICIOS
+// =====================================================
+
+model ProfesionalServicio {
+  id Int @id @default(autoincrement())
+
+  profesionalId Int @map("profesional_id")
+  servicioId    Int @map("servicio_id")
+
+  precioPersonalizado          Decimal? @map("precio_personalizado") @db.Decimal(10, 2)
+  duracionPersonalizadaMinutos Int?     @map("duracion_personalizada_minutos")
+
+  activo Boolean @default(true)
+
+  profesional Profesional @relation(fields: [profesionalId], references: [id])
+  servicio    Servicio    @relation(fields: [servicioId], references: [id])
+
+  @@unique([profesionalId, servicioId])
+  @@index([servicioId])
+  @@map("profesionales_servicios")
+}
+
+// =====================================================
+// HORARIO RECURRENTE DEL PROFESIONAL
+// =====================================================
+
+model HorarioProfesional {
+  id Int @id @default(autoincrement())
+
+  profesionalId Int @map("profesional_id")
+
+  diaSemana DiaSemana @map("dia_semana")
+
+  horaInicio DateTime @map("hora_inicio") @db.Time(0)
+  horaFin    DateTime @map("hora_fin") @db.Time(0)
+
+  activo Boolean @default(true)
+
+  profesional Profesional @relation(fields: [profesionalId], references: [id])
+
+  @@unique([profesionalId, diaSemana, horaInicio, horaFin])
+  @@index([profesionalId, diaSemana])
+  @@map("horarios_profesional")
+}
+
+// =====================================================
+// EXCEPCIONES
+// =====================================================
+
+model ExcepcionHorario {
+  id Int @id @default(autoincrement())
+
+  profesionalId Int @map("profesional_id")
+
+  fecha DateTime @db.Date
+
+  horaInicio DateTime? @map("hora_inicio") @db.Time(0)
+  horaFin    DateTime? @map("hora_fin") @db.Time(0)
+
+  diaCompleto Boolean @default(false) @map("dia_completo")
+
+  tipo TipoExcepcionHorario
+
+  motivo String? @db.VarChar(250)
+
+  profesional Profesional @relation(fields: [profesionalId], references: [id])
+
+  @@index([profesionalId, fecha])
+  @@map("excepciones_horario")
+}
+
+// =====================================================
+// CITAS
+// =====================================================
+
+model Cita {
+  id Int @id @default(autoincrement())
+
+  organizacionId Int @map("organizacion_id")
+  profesionalId  Int @map("profesional_id")
+  clienteId      Int @map("cliente_id")
+  servicioId     Int @map("servicio_id")
+
+  fechaInicio DateTime @map("fecha_inicio") @db.Timestamptz(6)
+  fechaFin    DateTime @map("fecha_fin") @db.Timestamptz(6)
+
+  precio Decimal @db.Decimal(10, 2)
+
+  duracionMinutos Int @map("duracion_minutos")
+
+  estado EstadoCita @default(RESERVA_TEMPORAL)
+
+  fechaExpiracionReserva DateTime? @map("fecha_expiracion_reserva") @db.Timestamptz(6)
+
+  notasCliente String? @map("notas_cliente") @db.Text
+
+  fechaCreacion      DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion") @db.Timestamptz(6)
+
+  organizacion Organizacion @relation(fields: [organizacionId], references: [id])
+  profesional  Profesional  @relation(fields: [profesionalId], references: [id])
+  cliente      Cliente      @relation(fields: [clienteId], references: [id])
+  servicio     Servicio     @relation(fields: [servicioId], references: [id])
+
+  pagos Pago[]
+
+  @@index([profesionalId, fechaInicio, fechaFin])
+  @@index([clienteId, fechaInicio])
+  @@index([estado])
+  @@index([fechaExpiracionReserva])
+  @@map("citas")
+}
+
+// =====================================================
+// PAGOS
+// =====================================================
+
+model Pago {
+  id Int @id @default(autoincrement())
+
+  organizacionId Int @map("organizacion_id")
+  citaId         Int @map("cita_id")
+
+  montoEsperado Decimal  @map("monto_esperado") @db.Decimal(10, 2)
+  montoRecibido Decimal? @map("monto_recibido") @db.Decimal(10, 2)
+
+  metodo MetodoPago
+  estado EstadoPago @default(PENDIENTE)
+
+  referenciaBancaria String? @map("referencia_bancaria") @db.VarChar(150)
+
+  fechaPago         DateTime? @map("fecha_pago") @db.Timestamptz(6)
+  fechaConfirmacion DateTime? @map("fecha_confirmacion") @db.Timestamptz(6)
+
+  fechaCreacion      DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion") @db.Timestamptz(6)
+
+  organizacion Organizacion @relation(fields: [organizacionId], references: [id])
+  cita         Cita         @relation(fields: [citaId], references: [id])
+
+  comprobantes   ComprobantePago[]
+  conciliaciones ConciliacionPago[]
+
+  @@index([citaId])
+  @@index([estado])
+  @@map("pagos")
+}
+
+// =====================================================
+// COMPROBANTES DE PAGO
+// =====================================================
+
+model ComprobantePago {
+  id Int @id @default(autoincrement())
+
+  pagoId Int @map("pago_id")
+
+  archivoUrl  String  @map("archivo_url") @db.VarChar(500)
+  hashArchivo String? @unique @map("hash_archivo") @db.VarChar(150)
+
+  montoDetectado      Decimal?  @map("monto_detectado") @db.Decimal(10, 2)
+  fechaDetectada      DateTime? @map("fecha_detectada") @db.Timestamptz(6)
+  referenciaDetectada String?   @map("referencia_detectada") @db.VarChar(150)
+  bancoDetectado      String?   @map("banco_detectado") @db.VarChar(150)
+  nombreDetectado     String?   @map("nombre_detectado") @db.VarChar(200)
+
+  estadoProcesamiento EstadoProcesamientoComprobante @default(RECIBIDO) @map("estado_procesamiento")
+
+  fechaCreacion DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+
+  pago Pago @relation(fields: [pagoId], references: [id])
+
+  @@index([pagoId])
+  @@map("comprobantes_pago")
+}
+
+// =====================================================
+// MOVIMIENTOS BANCARIOS RECIBIDOS
+// =====================================================
+
+model TransaccionBancaria {
+  id Int @id @default(autoincrement())
+
+  organizacionId Int @map("organizacion_id")
+
+  banco         String  @db.VarChar(150)
+  cuentaDestino String? @map("cuenta_destino") @db.VarChar(100)
+
+  referencia String? @db.VarChar(150)
+  monto      Decimal @db.Decimal(10, 2)
+
+  ordenante String? @db.VarChar(200)
+
+  fechaTransaccion DateTime? @map("fecha_transaccion") @db.Timestamptz(6)
+  fechaRecepcion   DateTime  @default(now()) @map("fecha_recepcion") @db.Timestamptz(6)
+
+  origen OrigenTransaccionBancaria
+
+  hashEvento String? @unique @map("hash_evento") @db.VarChar(150)
+
+  payloadRaw Json? @map("payload_raw")
+
+  organizacion Organizacion @relation(fields: [organizacionId], references: [id])
+
+  conciliaciones ConciliacionPago[]
+
+  @@index([organizacionId, fechaTransaccion])
+  @@index([referencia])
+  @@map("transacciones_bancarias")
+}
+
+// =====================================================
+// CONCILIACIÓN
+// =====================================================
+
+model ConciliacionPago {
+  id Int @id @default(autoincrement())
+
+  pagoId                Int @map("pago_id")
+  transaccionBancariaId Int @map("transaccion_bancaria_id")
+
+  puntajeCoincidencia Decimal @map("puntaje_coincidencia") @db.Decimal(5, 2)
+
+  coincideMonto      Boolean @default(false) @map("coincide_monto")
+  coincideReferencia Boolean @default(false) @map("coincide_referencia")
+  coincideFecha      Boolean @default(false) @map("coincide_fecha")
+  coincideCuenta     Boolean @default(false) @map("coincide_cuenta")
+
+  estado EstadoConciliacion @default(PENDIENTE)
+
+  observacion String? @db.Text
+
+  fechaCreacion DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+
+  pago                Pago                @relation(fields: [pagoId], references: [id])
+  transaccionBancaria TransaccionBancaria @relation(fields: [transaccionBancariaId], references: [id])
+
+  @@unique([pagoId, transaccionBancariaId])
+  @@index([estado])
+  @@map("conciliaciones_pago")
+}

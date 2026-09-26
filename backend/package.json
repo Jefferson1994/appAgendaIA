@@ -2,12 +2,19 @@
   "name": "backend-agenda-ia",
   "version": "1.0.0",
   "private": true,
-  "main": "server.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
     "cors": "^2.8.5",
-    "express": "^4.19.2"
+    "dotenv": "^18.0.3",
+    "express": "^4.19.2",
+    "luxon": "^3.7.2"
+  },
+  "devDependencies": {
+    "prisma": "^6.19.3"
   }
 }
