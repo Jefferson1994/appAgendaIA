@@ -2,29 +2,87 @@ const prisma =
   require('../../shared/prisma');
 
 
-const CODIGO_ORGANIZACION =
-  'agenda-demo';
+// =====================================================
+// Utilidad para errores controlados
+// =====================================================
+
+function crearError(
+  mensaje,
+  statusCode = 400,
+  codigo = 'ERROR_CLIENTE'
+) {
+
+  const error =
+    new Error(mensaje);
+
+  error.statusCode =
+    statusCode;
+
+  error.codigo =
+    codigo;
+
+  return error;
+}
 
 
 // =====================================================
-// Obtener organización actual
+// Normalizar y validar organización
 // =====================================================
 
-async function obtenerOrganizacionActual() {
+async function obtenerOrganizacion(
+  organizacionId
+) {
+
+  if (!organizacionId) {
+
+    throw crearError(
+      'organizacionId es obligatorio',
+      400,
+      'ORGANIZACION_REQUERIDA'
+    );
+
+  }
+
+
+  const id =
+    Number(organizacionId);
+
+
+  if (
+    !Number.isInteger(id)
+    ||
+    id <= 0
+  ) {
+
+    throw crearError(
+      'organizacionId no es válido',
+      400,
+      'ORGANIZACION_INVALIDA'
+    );
+
+  }
+
 
   const organizacion =
-    await prisma.organizacion.findUnique({
+    await prisma.organizacion.findFirst({
+
       where: {
-        codigo:
-          CODIGO_ORGANIZACION
+
+        id,
+
+        activo: true
+
       }
+
     });
 
 
   if (!organizacion) {
 
-    throw new Error(
-      `No existe la organización ${CODIGO_ORGANIZACION}`
+    throw crearError(
+      'Organización no encontrada',
+      404,
+      'ORGANIZACION_NO_ENCONTRADA'
     );
 
   }
@@ -35,52 +93,115 @@ async function obtenerOrganizacionActual() {
 
 
 // =====================================================
-// Listar clientes
+// Normalizar teléfono
 // =====================================================
 
-async function leerPacientes() {
+function normalizarTelefono(
+  telefono
+) {
+
+  if (!telefono) {
+
+    throw crearError(
+      'telefono es obligatorio',
+      400,
+      'TELEFONO_REQUERIDO'
+    );
+
+  }
+
+
+  const telefonoNormalizado =
+    String(telefono).trim();
+
+
+  if (!telefonoNormalizado) {
+
+    throw crearError(
+      'telefono no es válido',
+      400,
+      'TELEFONO_INVALIDO'
+    );
+
+  }
+
+
+  return telefonoNormalizado;
+}
+
+
+// =====================================================
+// Listar clientes de UNA organización
+// =====================================================
+
+async function leerPacientes(
+  organizacionId
+) {
 
   const organizacion =
-    await obtenerOrganizacionActual();
+    await obtenerOrganizacion(
+      organizacionId
+    );
 
 
   return prisma.cliente.findMany({
+
     where: {
+
       organizacionId:
         organizacion.id,
 
-      activo: true
+      activo:
+        true
+
     },
 
     orderBy: {
-      fechaCreacion: 'desc'
+      fechaCreacion:
+        'desc'
     }
+
   });
 }
 
 
 // =====================================================
-// Buscar cliente por teléfono
+// Buscar cliente por teléfono dentro de una organización
 // =====================================================
 
 async function buscarPacientePorTelefono(
+  organizacionId,
   telefono
 ) {
 
   const organizacion =
-    await obtenerOrganizacionActual();
+    await obtenerOrganizacion(
+      organizacionId
+    );
+
+
+  const telefonoNormalizado =
+    normalizarTelefono(
+      telefono
+    );
 
 
   return prisma.cliente.findUnique({
+
     where: {
+
       organizacionId_telefono: {
+
         organizacionId:
           organizacion.id,
 
         telefono:
-          telefono.trim()
+          telefonoNormalizado
+
       }
+
     }
+
   });
 }
 
@@ -90,80 +211,151 @@ async function buscarPacientePorTelefono(
 // =====================================================
 
 async function registrarPaciente({
+
+  organizacionId,
+
   nombre,
+
   telefono,
+
   direccion
+
 }) {
 
   const organizacion =
-    await obtenerOrganizacionActual();
+    await obtenerOrganizacion(
+      organizacionId
+    );
+
+
+  if (
+    !nombre
+    ||
+    String(nombre).trim() === ''
+  ) {
+
+    throw crearError(
+      'nombre es obligatorio',
+      400,
+      'NOMBRE_REQUERIDO'
+    );
+
+  }
 
 
   const telefonoNormalizado =
-    telefono.trim();
+    normalizarTelefono(
+      telefono
+    );
 
+
+  const nombreNormalizado =
+    String(nombre).trim();
+
+
+  const direccionNormalizada =
+
+    direccion
+    &&
+    String(direccion).trim() !== ''
+    &&
+    String(direccion).trim() !== 'N/D'
+
+      ? String(direccion).trim()
+
+      : null;
+
+
+  // ===================================================
+  // Revisar si ya existe dentro de ESA organización
+  // ===================================================
 
   const existente =
     await prisma.cliente.findUnique({
+
       where: {
+
         organizacionId_telefono: {
+
           organizacionId:
             organizacion.id,
 
           telefono:
             telefonoNormalizado
+
         }
+
       }
+
     });
 
 
   if (existente) {
 
     return {
-      nuevo: false,
-      paciente: existente
+
+      nuevo:
+        false,
+
+      paciente:
+        existente
+
     };
 
   }
 
 
+  // ===================================================
+  // Crear cliente
+  // ===================================================
+
   const cliente =
     await prisma.cliente.create({
+
       data: {
+
         organizacionId:
           organizacion.id,
 
-        // Por ahora guardamos el nombre
-        // completo en este campo.
-        // No intentamos separar apellido
-        // automáticamente porque no sería
-        // confiable para nombres reales.
         nombre:
-          nombre.trim(),
+          nombreNormalizado,
 
         telefono:
           telefonoNormalizado,
 
         direccion:
-          direccion &&
-          direccion !== 'N/D'
-            ? direccion.trim()
-            : null,
+          direccionNormalizada,
 
-        activo: true
+        activo:
+          true
+
       }
+
     });
 
 
   return {
-    nuevo: true,
-    paciente: cliente
+
+    nuevo:
+      true,
+
+    paciente:
+      cliente
+
   };
 }
 
 
+// =====================================================
+// Exports
+// =====================================================
+
 module.exports = {
+
   leerPacientes,
+
   buscarPacientePorTelefono,
+
   registrarPaciente
+
 };

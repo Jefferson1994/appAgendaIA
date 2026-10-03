@@ -98,6 +98,7 @@ model Organizacion {
   citas                  Cita[]
   pagos                  Pago[]
   transaccionesBancarias TransaccionBancaria[]
+  canalesAtencion        CanalAtencion[]
 
   @@map("organizaciones")
 }
@@ -132,10 +133,11 @@ model Profesional {
 
   organizacion Organizacion @relation(fields: [organizacionId], references: [id])
 
-  servicios   ProfesionalServicio[]
-  horarios    HorarioProfesional[]
-  excepciones ExcepcionHorario[]
-  citas       Cita[]
+  servicios       ProfesionalServicio[]
+  horarios        HorarioProfesional[]
+  excepciones     ExcepcionHorario[]
+  citas           Cita[]
+  canalesAtencion CanalAtencion[]
 
   @@unique([organizacionId, codigo])
   @@index([organizacionId])
@@ -446,4 +448,38 @@ model ConciliacionPago {
   @@unique([pagoId, transaccionBancariaId])
   @@index([estado])
   @@map("conciliaciones_pago")
+}
+
+// =====================================================
+// CANAL ATENCION
+// =================================================
+model CanalAtencion {
+  id Int @id @default(autoincrement())
+
+  organizacionId Int @map("organizacion_id")
+  profesionalId  Int @map("profesional_id")
+
+  tipo String @db.VarChar(30)
+
+  // Durante desarrollo:
+  // wa-carlos-demo
+  // wa-ana-demo
+  //
+  // Cuando conectemos WhatsApp Cloud:
+  // aquí podremos guardar el phone_number_id de Meta.
+  identificador String @unique @db.VarChar(150)
+
+  numeroDestino String? @map("numero_destino") @db.VarChar(30)
+
+  activo Boolean @default(true)
+
+  fechaCreacion DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+
+  organizacion Organizacion @relation(fields: [organizacionId], references: [id])
+
+  profesional Profesional @relation(fields: [profesionalId], references: [id])
+
+  @@index([organizacionId, activo])
+  @@index([profesionalId, activo])
+  @@map("canales_atencion")
 }

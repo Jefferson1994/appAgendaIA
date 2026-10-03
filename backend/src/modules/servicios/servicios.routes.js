@@ -5,92 +5,198 @@ const {
   buscarServicioPorId
 } = require('./servicios.service');
 
+
 const router = express.Router();
 
 
 // =====================================================
 // GET /servicios
-// GET /servicios?texto=consulta
+//
+// Ejemplos:
+//
+// /servicios?profesionalId=1
+//
+// /servicios?profesionalId=2&texto=limpieza
 // =====================================================
 
-router.get('/', async (req, res) => {
+router.get(
+  '/',
+  async (req, res) => {
 
-  try {
+    try {
 
-    const { texto } = req.query;
+      const {
+        profesionalId,
+        texto
+      } = req.query;
 
-    const servicios =
-      await buscarServicios(texto);
 
-    return res.json({
-      ok: true,
-      servicios
-    });
+      if (!profesionalId) {
 
-  } catch (error) {
+        return res
+          .status(400)
+          .json({
 
-    console.error(
-      'Error consultando servicios:',
-      error
-    );
+            ok: false,
 
-    return res.status(500).json({
-      ok: false,
-      error:
-        'No fue posible consultar los servicios'
-    });
+            codigo:
+              'PROFESIONAL_REQUERIDO',
+
+            error:
+              'profesionalId es obligatorio'
+
+          });
+
+      }
+
+
+      const servicios =
+        await buscarServicios(
+          profesionalId,
+          texto
+        );
+
+
+      return res.json({
+        ok: true,
+        servicios
+      });
+
+    } catch (error) {
+
+      console.error(
+        'Error consultando servicios:',
+        error
+      );
+
+
+      return res
+        .status(
+          error.statusCode || 500
+        )
+        .json({
+
+          ok: false,
+
+          codigo:
+            error.codigo
+            ||
+            'ERROR_INTERNO',
+
+          error:
+            error.message
+            ||
+            'No fue posible consultar los servicios'
+
+        });
+
+    }
 
   }
-
-});
+);
 
 
 // =====================================================
 // GET /servicios/:id
+//
+// Ejemplo:
+//
+// /servicios/1?profesionalId=1
 // =====================================================
 
-router.get('/:id', async (req, res) => {
+router.get(
+  '/:id',
+  async (req, res) => {
 
-  try {
+    try {
 
-    const servicio =
-      await buscarServicioPorId(
-        req.params.id
+      const {
+        profesionalId
+      } = req.query;
+
+
+      if (!profesionalId) {
+
+        return res
+          .status(400)
+          .json({
+
+            ok: false,
+
+            codigo:
+              'PROFESIONAL_REQUERIDO',
+
+            error:
+              'profesionalId es obligatorio'
+
+          });
+
+      }
+
+
+      const servicio =
+        await buscarServicioPorId(
+          profesionalId,
+          req.params.id
+        );
+
+
+      if (!servicio) {
+
+        return res
+          .status(404)
+          .json({
+
+            ok: false,
+
+            codigo:
+              'SERVICIO_NO_ENCONTRADO',
+
+            error:
+              'El profesional no ofrece ese servicio'
+
+          });
+
+      }
+
+
+      return res.json({
+        ok: true,
+        servicio
+      });
+
+    } catch (error) {
+
+      console.error(
+        'Error consultando servicio:',
+        error
       );
 
 
-    if (!servicio) {
+      return res
+        .status(
+          error.statusCode || 500
+        )
+        .json({
 
-      return res.status(404).json({
-        ok: false,
-        error:
-          'Servicio no encontrado'
-      });
+          ok: false,
+
+          codigo:
+            error.codigo
+            ||
+            'ERROR_INTERNO',
+
+          error:
+            error.message
+            ||
+            'No fue posible consultar el servicio'
+
+        });
 
     }
 
-
-    return res.json({
-      ok: true,
-      servicio
-    });
-
-  } catch (error) {
-
-    console.error(
-      'Error consultando servicio:',
-      error
-    );
-
-    return res.status(500).json({
-      ok: false,
-      error:
-        'No fue posible consultar el servicio'
-    });
-
   }
-
-});
+);
 
 
 module.exports = router;
