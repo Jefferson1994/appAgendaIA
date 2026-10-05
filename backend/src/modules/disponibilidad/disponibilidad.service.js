@@ -1,6 +1,9 @@
 const { DateTime } = require("luxon");
 
 const prisma = require("../../shared/prisma");
+const {
+  ESTADOS_CITA_BLOQUEANTES
+} = require('../../shared/reservas');
 
 
 
@@ -477,7 +480,7 @@ async function obtenerDisponibilidad({
 
       estado: {
 
-        in: ["RESERVA_TEMPORAL", "PENDIENTE_PAGO", "CONFIRMADA", "ATENDIDA"],
+        in: ESTADOS_CITA_BLOQUEANTES,
 
       },
 

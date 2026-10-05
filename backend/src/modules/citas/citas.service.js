@@ -3,8 +3,11 @@ const prisma = require('../../shared/prisma');
 const {
   obtenerDisponibilidad
 } = require('../disponibilidad/disponibilidad.service');
-
-const MINUTOS_RESERVA = 15;
+const {
+  ESTADOS_RESERVA_EXPIRABLES,
+  calcularExpiracionReserva,
+  expirarReservasVencidas
+} = require('../../shared/reservas');
 
 function errorApi(statusCode, codigo, mensaje) {
   const error = new Error(mensaje);
@@ -155,14 +158,7 @@ async function crearReservaTemporal({ canalId, clienteId, servicioId, fechaInici
 
     const ahora = new Date();
     // Expirar bloqueos antiguos antes de volver a ofrecer esos horarios.
-    await tx.cita.updateMany({
-      where: {
-        profesionalId: canal.profesionalId,
-        estado: 'RESERVA_TEMPORAL',
-        fechaExpiracionReserva: { lte: ahora }
-      },
-      data: { estado: 'EXPIRADA' }
-    });
+    await expirarReservasVencidas(tx, canal.profesionalId);
 
     // Si el mismo cliente reintenta la petición, devolver la reserva
     // vigente que ya existe, sin crear otra fila innecesariamente.
@@ -173,7 +169,7 @@ async function crearReservaTemporal({ canalId, clienteId, servicioId, fechaInici
         clienteId: idCliente,
         servicioId: idServicio,
         fechaInicio: fechaSolicitada.toUTC().toJSDate(),
-        estado: { in: ['RESERVA_TEMPORAL', 'PENDIENTE_PAGO'] },
+        estado: { in: ESTADOS_RESERVA_EXPIRABLES },
         fechaExpiracionReserva: { gt: ahora }
       }
     });
@@ -227,7 +223,7 @@ async function crearReservaTemporal({ canalId, clienteId, servicioId, fechaInici
         precio,
         duracionMinutos,
         estado: 'RESERVA_TEMPORAL',
-        fechaExpiracionReserva: new Date(Date.now() + MINUTOS_RESERVA * 60 * 1000)
+        fechaExpiracionReserva: calcularExpiracionReserva(ahora)
       }
     });
 

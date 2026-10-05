@@ -42,8 +42,14 @@ enum MetodoPago {
   PASARELA
 }
 
+enum ProveedorPago {
+  SIMULADOR
+  PAYPHONE
+}
+
 enum EstadoPago {
   PENDIENTE
+  EXPIRADO
   COMPROBANTE_RECIBIDO
   EN_CONCILIACION
   CONFIRMADO
@@ -336,6 +342,14 @@ model Pago {
 
   metodo MetodoPago
   estado EstadoPago @default(PENDIENTE)
+
+  referenciaCobro      String         @unique @map("referencia_cobro") @db.VarChar(80)
+  proveedor            ProveedorPago  @default(SIMULADOR)
+  referenciaProveedor  String?        @unique @map("referencia_proveedor") @db.VarChar(150)
+  urlPago              String?        @map("url_pago") @db.VarChar(500)
+  moneda               String         @default("USD") @db.Char(3)
+  porcentajeAnticipoAplicado Decimal? @map("porcentaje_anticipo_aplicado") @db.Decimal(5, 2)
+  fechaExpiracion      DateTime?      @map("fecha_expiracion") @db.Timestamptz(6)
 
   referenciaBancaria String? @map("referencia_bancaria") @db.VarChar(150)
 

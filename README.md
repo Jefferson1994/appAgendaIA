@@ -1,142 +1,170 @@
-# Agenda IA por WhatsApp — MVP
+# Agenda IA — MVP de reservas por WhatsApp
 
-Prototipo funcional del flujo: **canal de chat → n8n → IA con contexto → backend → datos**.
+Agenda IA es una plataforma SaaS multiempresa y multiprofesional para atender clientes por WhatsApp con IA, informar servicios, consultar disponibilidad real y gestionar citas sin mezclar los datos de cada profesional.
 
-Hoy corre simulando el canal con Postman, pero está pensado para reemplazarlo por Telegram o WhatsApp sin tocar el resto del flujo.
+Actualmente se prueba con Postman. El flujo está preparado para sustituir esa entrada por WhatsApp Cloud API sin cambiar el núcleo de reservas.
 
-```
-Postman (simula WhatsApp/Telegram)
+```text
+Postman / WhatsApp Cloud API
         |
         v
-   n8n (Webhook)
+      n8n
+        |
+        +--> resolver contexto por canal
+        +--> IA con memoria por canal y cliente
+        +--> servicios, clientes, disponibilidad y reservas
         |
         v
-   AI Agent (Gemini) + memoria de conversacion por usuario_id
-        |
-        +--> tool: registrar_lead     --> Backend Node --> data/leads.txt
-        |
-        +--> tool: consultar_servicios --> Backend Node --> catalogo de servicios
+Backend Express + PostgreSQL + Prisma
 ```
 
-El documento completo del proyecto (alcance de 6 semanas, modelo de datos, fases) está en
-**"Agenda IA por WhatsApp — Plan de implementación"**. Esto que ves aquí es el MVP de la
-**Semana 1 / Día 1-3**: probar que el agente conversa, entiende contexto y llama al backend real.
+## Estado del MVP
 
-## Estructura del repo
+- Arquitectura multi-tenant: organizaciones, profesionales y canales independientes.
+- Contexto resuelto por identificador de canal.
+- Servicios, clientes, horarios y disponibilidad aislados por organización y profesional.
+- Reservas temporales con vencimiento configurable, por defecto 15 minutos.
+- Protección transaccional y de PostgreSQL contra citas superpuestas.
+- Expiración coherente de `RESERVA_TEMPORAL`, `PENDIENTE_PAGO` y su solicitud de pago asociada.
+- Solicitudes de pago en modo simulador, con referencias únicas y webhook idempotente para pruebas locales.
 
-```
-backend/    API en Node/Express. Guarda leads en un .txt y expone el catalogo de servicios.
-n8n/        docker-compose.yml para levantar n8n local + el workflow ya armado (JSON para importar).
-postman/    Coleccion de Postman con requests de prueba, en orden, para simular una conversacion.
+La pasarela real, WhatsApp Cloud API, Google Calendar, recordatorios y el panel administrativo todavía no están integrados.
+
+## Estructura
+
+```text
+backend/
+  prisma/                         Esquema, seeds y migraciones PostgreSQL.
+  src/modules/
+    contexto/                     Resuelve organización y profesional por canal.
+    pacientes/                    Clientes de una organización.
+    servicios/                    Catálogo por profesional.
+    disponibilidad/               Horarios disponibles reales.
+    citas/                        Reservas temporales.
+    pagos/                        Solicitudes de cobro y webhook simulador.
+  src/shared/reservas.js          Estados y vencimiento centralizados.
+  src/jobs/expirar-reservas.js    Limpieza periódica de reservas vencidas.
+n8n/workflow-agenda-ia.json       Exportación actual del workflow.
+postman/                          Colección para pruebas HTTP.
 ```
 
 ## Requisitos
 
-- Docker Desktop
-- Node.js 18+ (usa `nvm use 20` si tienes varias versiones instaladas)
-- Una API key gratis de Google Gemini: https://aistudio.google.com/apikey
+- Node.js 18 o superior.
+- Docker Desktop.
+- PostgreSQL del `backend/docker-compose.yml`.
+- n8n del directorio `n8n/`.
+- Credencial OpenAI configurada en n8n.
 
-## Cómo levantar todo
+## Inicio local
 
-### 1. Backend
+En una terminal de PowerShell:
 
-```bash
-cd backend
+```powershell
+cd C:\Users\USUARIO\Proyectos\Chat-WhatsApp\appAgendaIA\backend
+docker compose up -d
 npm install
-npm start
+npx prisma migrate deploy
+npm run dev
 ```
 
-Debe quedar corriendo en `http://localhost:3000`. Pruébalo con `http://localhost:3000/health`.
+En otra terminal:
 
-Endpoints:
-
-| Método | Ruta | Qué hace |
-|---|---|---|
-| `POST` | `/leads` | Registra un paciente nuevo `{ nombre, telefono, direccion }`. Si el telefono ya existe, no lo duplica. |
-| `GET` | `/leads` | Lista los leads guardados (para depurar). |
-| `GET` | `/servicios?texto=` | Devuelve el catálogo de servicios del doctor (filtrable por texto). |
-
-Los datos se guardan en `backend/data/leads.txt` — es un archivo de texto plano a propósito, para
-que el MVP no dependiera de instalar una base de datos. **El siguiente paso real es reemplazar esto
-por Postgres** (ver "Qué sigue" abajo).
-
-### 2. n8n
-
-```bash
-cd n8n
+```powershell
+cd C:\Users\USUARIO\Proyectos\Chat-WhatsApp\appAgendaIA\n8n
 docker compose up -d
 ```
 
-Abre `http://localhost:5678`:
+Verifica el backend en `http://localhost:3000/health` y abre n8n en `http://localhost:5678`.
 
-1. Crea tu cuenta local de n8n (owner) — es solo local, no se sube a ningún lado.
-2. Ve a **Credentials → Add Credential → Google Gemini** y pega tu API key de Gemini.
-3. En el workflow, importa `n8n/workflow-agenda-ia.json` (menú `⋯` → **Import from File**).
-4. Abre el nodo **"Google Gemini Chat Model"** y selecciona la credencial que creaste.
-5. Publica el workflow (botón **"Publish"** arriba a la derecha).
-6. Copia la URL del nodo **"Webhook Postman"** (algo como `http://localhost:5678/webhook/chat-agenda`).
+## Variables de entorno
 
-> **Nota sobre el modelo:** Google va renombrando/retirando modelos de Gemini seguido. Si el nodo
-> tira error 404 de "modelo no disponible", entra al dropdown de **Model** en el nodo y elige el
-> más nuevo disponible que diga "flash" y **no** diga "preview" (los preview pueden desaparecer sin
-> aviso). Si tira error 503 "high demand", es saturación temporal de la capa gratis — reintenta, o
-> activa **Retry On Fail** en la pestaña Settings del nodo.
+Usa [backend/.env.example](backend/.env.example) como referencia:
 
-Para parar n8n sin perder nada (workflow, credenciales): `docker compose stop` dentro de `n8n/`.
-Para volver a levantarlo: `docker compose start`.
+```env
+DATABASE_URL="postgresql://USUARIO:PASSWORD@localhost:5433/agendaia?schema=public"
+PORT=3000
+NODE_ENV=development
+MINUTOS_RESERVA=15
+PAGO_SIMULADOR_SECRETO=cambia-este-secreto-local
+```
 
-### 3. Probar con Postman
+`MINUTOS_RESERVA` debe ser un entero entre 1 y 60. El simulador de pagos se desactiva automáticamente cuando `NODE_ENV=production`.
 
-1. Importa `postman/Agenda-IA.postman_collection.json`.
-2. En cada request, reemplaza la URL por la que copiaste del webhook de n8n (o edita la variable
-   `webhook_url` de la colección).
-3. Corre los requests de la carpeta **"n8n - Flujo del agente"** en orden — simulan una
-   conversación real: saludo → pregunta de servicio → da nombre y teléfono → otra pregunta.
-   Todos usan el mismo `usuario_id` para que la IA recuerde el contexto entre mensajes.
-4. La carpeta **"Backend directo (debug)"** te deja pegarle al backend sin pasar por n8n, para
-   descartar si un error es de la IA o del backend.
+## Workflow de n8n
 
-## Cómo está armado el agente (por si lo vas a tocar)
+El archivo [n8n/workflow-agenda-ia.json](n8n/workflow-agenda-ia.json) corresponde al workflow exportado desde la instancia local. Incluye:
 
-Dentro del nodo **AI Agent** en n8n:
+- `Webhook Postman`.
+- `resolver_contexto`.
+- `AI Agent` con OpenAI.
+- Memoria con clave `canal_id:usuario_id`.
+- Herramientas `consultar_servicios`, `registrar_paciente`, `ver_disponibilidad` y `crear_reserva`.
 
-- **System Message**: define el tono y las reglas (no inventar precios, pedir nombre/teléfono
-  antes de ayudar, etc). Si quieres cambiar el comportamiento del bot, empieza por ahí.
-- **Tools conectados** (puerto "Tool" del nodo): `registrar_lead` y `consultar_servicios`, cada uno
-  es un nodo "HTTP Request Tool" que le pega al backend. El agente decide solo cuál usar según el
-  mensaje del paciente — no hay lógica de "if" en ningún lado, es la IA la que interpreta.
-- **Memoria**: nodo "Memoria de conversación", indexada por `usuario_id` — así cada paciente tiene
-  su propio hilo de conversación aunque le escriban al mismo bot.
+Para restaurarlo en otra instancia, importa el JSON, asigna tu credencial de OpenAI al nodo correspondiente y publica el workflow. Las credenciales se exportan como referencias, nunca con su secreto.
 
-Para agregar una función nueva al agente (ej. agendar cita): crea el endpoint en el backend,
-agrega un nuevo "HTTP Request Tool" en n8n apuntando a `http://host.docker.internal:3000/<ruta>`
-(ojo: `host.docker.internal`, no `localhost`, porque n8n corre dentro de Docker), y descríbele al
-tool en su campo "Description" cuándo debe usarlo — el agente lee esa descripción para decidir.
+La herramienta de pago no se conecta todavía al agente: el simulador es exclusivamente para validar el backend antes de tener una URL real de checkout de una pasarela.
 
-## Qué sigue (roadmap)
+## Flujo de reserva y pago simulado
 
-En orden de dificultad, ya definido con el dueño del proyecto:
+1. El agente registra o recupera al cliente.
+2. Consulta disponibilidad y crea una `RESERVA_TEMPORAL`.
+3. `POST /pagos/solicitar` crea una única solicitud de cobro y cambia la cita a `PENDIENTE_PAGO`.
+4. El webhook simulado confirma el pago de forma idempotente.
+5. Si el pago coincide y la reserva sigue vigente, la cita pasa a `CONFIRMADA`.
+6. Si la reserva vence, su solicitud pasa a `EXPIRADO`.
+7. Si el pago llega tarde, se registra como confirmado, pero no reabre ni duplica una cita expirada.
 
-1. **Google Calendar** — agregar tools `ver_disponibilidad` y `reservar_cita` usando la API de
-   Google Calendar (OAuth por profesional). Es el más directo de los que faltan.
-2. **Certificados en PDF** — tool que valide que el paciente sí asistió a la cita (consulta al
-   backend), genera un PDF desde una plantilla HTML (ej. con Puppeteer) y lo envía por WhatsApp.
-3. **Audio → texto** — los modelos de Gemini entienden audio de forma nativa, así que no
-   necesariamente hace falta un paso de transcripción aparte (Whisper); hay que probar mandarle el
-   audio directo desde el canal.
-4. **Cotejo de comprobantes de pago contra correo del banco** — el más complejo de los cuatro:
-   requiere un buzón de correo para las notificaciones bancarias, un parser distinto por banco, y
-   lógica de match (monto + referencia + fecha) entre la imagen del comprobante y el correo. Dejar
-   siempre una opción de aprobación manual del doctor como respaldo si el match automático falla.
+El backend decide las transiciones. n8n y el cliente no pueden marcar una cita como confirmada directamente.
 
-Y en paralelo, migrar `backend/data/leads.txt` a una base de datos real (Postgres) apenas el
-modelo de datos crezca más allá de leads y servicios — el archivo de texto fue una decisión
-deliberada para ir rápido en el MVP, no para quedarse así.
+### Crear una solicitud de pago
 
-## Seguridad / secretos
+```http
+POST http://localhost:3000/pagos/solicitar
+Content-Type: application/json
 
-- La API key de Gemini vive **solo** dentro de la credencial de n8n (guardada en
-  `n8n/data`, que está en `.gitignore` — nunca se sube al repo).
-- `backend/data/leads.txt` tampoco se sube (son datos de pacientes, aunque sean de prueba).
-- Si en algún momento conectas WhatsApp Cloud API o un banco de verdad, ese tipo de credenciales
-  van en variables de entorno (`.env`, también ignorado por git), nunca hardcodeadas en el código.
+{
+  "canal_id": "wa-ana-demo",
+  "cita_id": 4
+}
+```
+
+La respuesta contiene `referenciaCobro`, `montoEsperado`, `moneda` y `fechaExpiracion`. Reintentar la misma petición mientras el pago está pendiente devuelve la misma solicitud.
+
+### Simular el webhook aprobado
+
+```http
+POST http://localhost:3000/webhooks/pagos/simulador
+Content-Type: application/json
+x-pago-simulador-secreto: agendaia-simulador-local
+
+{
+  "evento_id": "sim-ana-0001",
+  "referencia_cobro": "REFERENCIA_DEVUELTA_POR_SOLICITAR",
+  "monto": 30
+}
+```
+
+Usa un `evento_id` nuevo por cada evento de la pasarela. Repetir exactamente el mismo evento no duplica el pago ni la cita.
+
+Para probar un monto incorrecto, envía un valor diferente a `montoEsperado`. El pago quedará `EN_CONCILIACION` y la cita no será confirmada.
+
+## Comprobación en Prisma Studio
+
+```powershell
+cd C:\Users\USUARIO\Proyectos\Chat-WhatsApp\appAgendaIA\backend
+npx prisma studio
+```
+
+Revisa estas tablas después de las pruebas:
+
+- `citas`: estado y `fecha_expiracion_reserva`.
+- `pagos`: referencia única, monto esperado y estado.
+- `transacciones_bancarias`: cada `evento_id` recibido por el simulador.
+- `conciliaciones_pago`: asociación entre el pago y el evento.
+
+## Próximo paso: pasarela real
+
+Cuando se elija el proveedor, se reemplazará el simulador por un adaptador específico que cree un checkout y valide la firma de sus webhooks. La verificación debe usar el evento firmado y el identificador externo del proveedor; un comprobante de transferencia enviado como imagen no confirma una cita.
+
+Antes de producción también se requiere autenticación entre n8n y el backend, validación de la firma de WhatsApp Cloud API y autorización para cualquier panel administrativo.

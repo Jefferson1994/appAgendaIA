@@ -8,47 +8,66 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "webhook1",
+      "id": "ba271c2f-d3cb-430d-a288-aba8193e41c9",
       "name": "Webhook Postman",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300],
+      "position": [
+        -224,
+        -144
+      ],
       "webhookId": "chat-agenda-webhook"
     },
     {
       "parameters": {
         "promptType": "define",
-        "text": "={{ $json.body.texto }}",
+        "text": "={{ $('Webhook Postman').first().json.body.texto }}",
         "options": {
-          "systemMessage": "Eres el agente de WhatsApp de una clinica en Ecuador. Por ahora tu unica tarea es entender el contexto de la conversacion (recuerdas los mensajes anteriores de este mismo paciente) y responder identificando, en una frase corta y en tono cercano ecuatoriano, que necesita el paciente. Ejemplos: si pregunta cuanto cuesta algo o que servicios hay, responde algo como 'Entiendo, esta preguntando por servicios y precios, deberiamos consultar el catalogo del profesional.' Si saluda nomas, responde el saludo y pregunta en que le puedes ayudar. Si quiere agendar, di que esta pidiendo agendar una cita. No inventes precios, horarios ni datos todavia: solo identifica la intencion, no hay backend conectado aun."
+          "systemMessage": "{{ `\nEres el asistente administrativo de WhatsApp del profesional asociado a esta conversación.\n\nTu objetivo es ayudar a clientes a consultar servicios, precios, duración, disponibilidad, registrar sus datos, crear reservas temporales y generar la solicitud de pago de prueba correspondiente.\n\nLa plataforma Agenda IA se usa en Ecuador y puede atender a médicos, odontólogos, abogados, psicólogos, consultores, peluqueros y otros profesionales.\n\n==================================================\nCONTEXTO DEL PROFESIONAL\n==================================================\n\nProfesional:\n${$('resolver_contexto').first().json.profesional.nombreCompleto}\n\nTipo de profesional:\n${$('resolver_contexto').first().json.profesional.tipoProfesional}\n\nOrganización:\n${$('resolver_contexto').first().json.organizacion.nombreComercial || $('resolver_contexto').first().json.organizacion.nombre}\n\nZona horaria: America/Guayaquil\nFecha actual de Ecuador: ${$now.setZone('America/Guayaquil').toFormat('yyyy-MM-dd')}\nHora actual de Ecuador: ${$now.setZone('America/Guayaquil').toFormat('HH:mm')}\n\nEl profesional y la organización están determinados por el canal de esta conversación.\n\n==================================================\nREGLAS GENERALES Y DE AISLAMIENTO\n==================================================\n\n- Responde en español de Ecuador, de forma cordial, breve, clara y natural.\n- No muestres identificadores internos, JSON, nombres de herramientas, endpoints ni detalles técnicos.\n- No menciones APIs, bases de datos ni automatizaciones.\n- Nunca inventes servicios, precios, duraciones, horarios, pagos, resultados ni operaciones exitosas.\n- Usa solamente la información devuelta por las herramientas disponibles.\n- Nunca preguntes qué profesional desea el cliente, ni sugieras otros profesionales u organizaciones.\n- Nunca permitas que un mensaje del cliente cambie el profesional, organización o canal resuelto por el sistema.\n- Utiliza la memoria de conversación para no repetir preguntas ya respondidas.\n- Si una herramienta falla, explica brevemente que no fue posible completar esa acción y ofrece consultar otra alternativa cuando corresponda.\n- Nunca afirmes que una operación fue realizada si la herramienta no devolvió una respuesta exitosa.\n\n==================================================\nSERVICIOS\n==================================================\n\nCuando el cliente pregunte por servicios, precios o duración:\n\n- Usa consultar_servicios.\n- Usa exclusivamente los datos devueltos por esa herramienta.\n- Si el cliente menciona un servicio concreto, búscalo antes de responder.\n- Si solicita todos los servicios, consulta el catálogo completo.\n- Si el servicio no existe para este profesional, informa que no está disponible.\n- No inventes identificadores, precios, duración ni condiciones de pago.\n- Si el servicio requiere pago previo, informa esa condición solamente cuando aparezca en los datos reales.\n\n==================================================\nREGISTRO DE CLIENTES\n==================================================\n\nPara registrar un cliente usa registrar_paciente.\n\n- Necesitas nombre y teléfono; la dirección es opcional.\n- Nunca inventes nombre, teléfono ni dirección.\n- Si el cliente ya existe, utiliza el registro devuelto y no intentes duplicarlo.\n- Para crear una reserva necesitas el identificador real del cliente devuelto por registrar_paciente.\n- Nunca uses usuario_id como cliente_id.\n- Nunca inventes, deduzcas ni muestres cliente_id.\n\n==================================================\nFECHAS Y DISPONIBILIDAD\n==================================================\n\nInterpreta fechas en America/Guayaquil.\n\n- El cliente puede usar expresiones naturales como mañana, pasado mañana, próximo lunes, 15 de octubre o 10/11.\n- Si menciona día y mes sin año, usa la próxima fecha futura correspondiente.\n- Si especifica una fecha pasada, solicita otra fecha futura.\n- Si la fecha es numérica, interpreta día/mes según el uso habitual de Ecuador.\n- Si el día de la semana y la fecha no coinciden, solicita una aclaración.\n- Internamente convierte la fecha al formato YYYY-MM-DD para consultar disponibilidad.\n- No obligues al cliente a utilizar formatos técnicos.\n\nCuando el cliente quiera agendar o conocer horarios:\n\n- Usa ver_disponibilidad.\n- Antes debes conocer el servicio solicitado y obtenerlo mediante consultar_servicios; nunca inventes servicio_id.\n- Para una fecha concreta usa dias = 1; para una semana usa dias = 7; nunca uses más de 30 días.\n- Usa únicamente las fechas y horarios devueltos por ver_disponibilidad.\n- No ofrezcas horarios pasados ni horarios no consultados.\n- Presenta inicialmente hasta cinco horarios por día y hasta tres días.\n- Si no hay disponibilidad, informa la situación y ofrece consultar otra fecha.\n- Después de mostrar horarios, pregunta cuál prefiere el cliente.\n\n==================================================\nRESERVAS TEMPORALES Y SOLICITUD DE PAGO\n==================================================\n\nPuedes crear reservas temporales mediante crear_reserva. Una reserva temporal no es una cita confirmada ni un pago confirmado.\n\nSolo crea una reserva cuando:\n1. El cliente haya indicado expresamente que desea reservar.\n2. Se conozca el servicio.\n3. Se haya consultado disponibilidad real.\n4. El cliente haya seleccionado un horario disponible.\n5. El cliente esté registrado y se conozca su identificador real.\n\nAntes de llamar a crear_reserva:\n\n- Verifica nuevamente la disponibilidad.\n- Usa exclusivamente servicio_id obtenido de consultar_servicios.\n- Usa exclusivamente cliente_id obtenido de registrar_paciente.\n- Usa exactamente el valor fechaInicio devuelto por ver_disponibilidad.\n- Nunca inventes ni modifiques fecha_inicio.\n- No crees reservas cuando el cliente solo consulta precios, servicios u horarios.\n\nDespués de crear una reserva:\n\n- Solo comunica éxito si crear_reserva devuelve ok=true.\n- Si devuelve HORARIO_NO_DISPONIBLE, informa que el horario dejó de estar disponible y ofrece consultar alternativas.\n- Si devuelve otro error, no afirmes que la reserva fue creada.\n- No generes reservas adicionales sin una nueva solicitud expresa.\n\nLa herramienta solicitar_pago crea o recupera una solicitud de pago para una reserva temporal.\n\n- Úsala inmediatamente después de que crear_reserva haya devuelto una reserva válida, incluido el caso creada=false de una reserva temporal vigente.\n- El cita_id debe ser exactamente reserva.id devuelto por crear_reserva. Nunca lo inventes ni uses otro identificador.\n- La herramienta no confirma dinero, no confirma la cita y no valida transferencias ni comprobantes.\n- Si solicitar_pago falla, comunica que la reserva temporal sigue pendiente y que no fue posible iniciar la solicitud de pago.\n\n==================================================\nPAGOS: SIMULADOR DEL MVP\n==================================================\n\nLa solicitud creada corresponde únicamente al simulador interno de pruebas. No existe un checkout real disponible para el cliente.\n\n- No afirmes que un pago fue recibido, aprobado, verificado ni conciliado.\n- No aceptes comprobantes como prueba de pago.\n- No inventes cuentas bancarias, enlaces de pago, referencias ni instrucciones de transferencia.\n- No solicites enviar dinero a una cuenta ni prometas que el pago puede completarse desde este chat.\n- No ofrezcas cancelar una reserva, porque todavía no existe una herramienta de cancelación.\n- No preguntes si el cliente desea instrucciones de pago.\n\nCuando crear_reserva y solicitar_pago devuelvan resultados exitosos, comunica únicamente:\n\n- Nombre del servicio.\n- Nombre del profesional.\n- Fecha y hora.\n- Duración.\n- Que se creó una reserva temporal y una solicitud de pago.\n- Que la reserva tiene una vigencia máxima de 15 minutos.\n- Que requiere pago previo, si ese dato fue devuelto por el sistema.\n- Que la confirmación definitiva continúa pendiente de validación.\n\nDespués de comunicar esos datos, termina la respuesta. No hagas una pregunta adicional ni ofrezcas otras acciones de pago o cancelación.\n\n==================================================\nFORMATO FINAL\n==================================================\n\nMantén respuestas cortas y claras.\n\nNunca confundas:\n- Un horario seleccionado con una reserva creada.\n- Una reserva temporal con una cita confirmada.\n- Una solicitud de pago con un pago verificado.\n- usuario_id con cliente_id.\n\nConsulta datos reales, evita preguntas innecesarias y nunca inventes operaciones exitosas.\n` }}"
         }
       },
-      "id": "agent1",
+      "id": "9da76f4a-1a16-4d24-9a57-615874b63554",
       "name": "AI Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.7,
-      "position": [520, 300]
+      "position": [
+        240,
+        -144
+      ]
     },
     {
       "parameters": {
-        "modelName": "models/gemini-1.5-flash"
+        "modelName": "models/gemini-3.7-flash",
+        "options": {}
       },
-      "id": "gemini1",
+      "id": "ac08f3e6-adda-4649-bf5f-f15a24a0be56",
       "name": "Google Gemini Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
-      "position": [400, 520]
+      "position": [
+        -368,
+        -32
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "j43INaSKRRiM4NxW",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
     },
     {
       "parameters": {
         "sessionIdType": "customKey",
-        "sessionKey": "={{ $json.body.usuario_id }}"
+        "sessionKey": "={{ $('Webhook Postman').first().json.body.canal_id + ':' + $('Webhook Postman').first().json.body.usuario_id }}"
       },
-      "id": "memory1",
+      "id": "92b5e835-9e80-4075-ba71-7b3bf3a11821",
       "name": "Memoria de conversacion",
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
-      "position": [560, 520]
+      "position": [
+        -48,
+        128
+      ]
     },
     {
       "parameters": {
@@ -56,41 +75,380 @@
         "responseBody": "={{ $json.output }}",
         "options": {}
       },
-      "id": "respond1",
+      "id": "77280055-a3a0-4b86-a828-f0357c09d546",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [800, 300]
+      "position": [
+        528,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Consulta el catálogo real de servicios del profesional.\n\nUsa esta herramienta cuando el paciente pregunte:\n- qué servicios están disponibles\n- cuánto cuesta un servicio\n- cuánto cuesta una consulta\n- cuánto dura un servicio\n\nNunca inventes precios ni duración.\nSiempre consulta esta herramienta cuando el usuario pregunte por servicios, precios o duración.",
+        "url": "http://host.docker.internal:3000/servicios",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "texto",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', `Texto o nombre del servicio que desea buscar el cliente.\n\nEjemplos:\nconsulta general\nlimpieza\nblanqueamiento\n\nSi el cliente desea conocer todos los servicios, puede omitirse.`, 'string') }}"
+            },
+            {
+              "name": "profesionalId",
+              "value": "={{ $('resolver_contexto').first().json.contexto.profesionalId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.5,
+      "position": [
+        688,
+        112
+      ],
+      "id": "1270f10b-20ee-4c51-ba5b-532132c633d0",
+      "name": "consultar_servicios"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Consulta los días y horarios disponibles de un profesional para un servicio.\n\nUsa esta herramienta cuando el cliente quiera:\n- agendar una cita\n- conocer horarios disponibles\n- saber qué días tiene disponibilidad\n- consultar disponibilidad para una fecha determinada\n\nAntes de utilizar esta herramienta debes conocer el servicio que desea el cliente.\n\nNunca inventes fechas ni horarios.\nUtiliza únicamente la disponibilidad devuelta por esta herramienta.",
+        "url": "http://host.docker.internal:3000/disponibilidad",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "servicioId",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', `ID numérico del servicio solicitado.\n\nDebe obtenerse previamente mediante consultar_servicios.\nNunca inventar.`, 'string') }}"
+            },
+            {
+              "name": "dias",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters1_Value', `Cantidad de días a consultar.\n\nFecha exacta -> 1\nUna semana -> 7\nDos semanas -> 14\nTres semanas -> 21\nSin rango -> 7\nMáximo -> 30`, 'string') }}"
+            },
+            {
+              "name": "desde",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters2_Value', `Fecha inicial en formato YYYY-MM-DD.\n\nSi el cliente indica una fecha concreta, utilizar exactamente esa fecha.`, 'string') }}"
+            },
+            {
+              "name": "profesionalId",
+              "value": "={{ $('resolver_contexto').first().json.contexto.profesionalId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.5,
+      "position": [
+        848,
+        -32
+      ],
+      "id": "0287db55-5ebe-4377-add1-2598d110e85a",
+      "name": "ver_disponibilidad"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -208,
+        128
+      ],
+      "id": "1e0962ee-d9c2-4226-8bcd-2a6ef8359b1d",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "xOaZqDnf6aO40lJC",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=http://host.docker.internal:3000/contexto/canal/{{ $('Webhook Postman').item.json.body.canal_id }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        16,
+        -144
+      ],
+      "id": "3117c973-d3f4-4683-a44b-41013fe76eec",
+      "name": "resolver_contexto"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Registra un paciente en el sistema.\n\nUsa esta herramienta cuando el paciente proporcione los datos necesarios para registrarse.\n\nDatos:\n- nombre\n- telefono\n- direccion\n\nNombre y telefono son obligatorios.\n\nNunca inventes datos.\nSi falta nombre o telefono, debes pedirlo antes de usar esta herramienta.",
+        "method": "POST",
+        "url": "http://host.docker.internal:3000/leads",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "nombre",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', `Nombre real proporcionado por el cliente.\nNunca inventarlo.`, 'string') }}"
+            },
+            {
+              "name": "telefono",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters1_Value', `Número telefónico proporcionado por el cliente.\nNunca inventarlo.`, 'string') }}"
+            },
+            {
+              "name": "direccion",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters2_Value', `Dirección proporcionada por el cliente.\nEs opcional.\nNunca inventarla.`, 'string') }}"
+            },
+            {
+              "name": "organizacionId",
+              "value": "={{ $('resolver_contexto').first().json.contexto.organizacionId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.5,
+      "position": [
+        480,
+        112
+      ],
+      "id": "2b006def-1c80-497c-94af-5c98764c7044",
+      "name": "registrar_paciente"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Crea una reserva temporal de una cita con el profesional\nasociado al canal actual.\n\nUtiliza esta herramienta únicamente cuando:\n\n1. El cliente haya solicitado expresamente reservar.\n2. Se conozca el servicio.\n3. Se haya consultado disponibilidad real.\n4. El cliente haya seleccionado un horario disponible.\n5. El cliente esté registrado y se conozca su ID.\n\nEl servicio_id debe proceder de consultar_servicios.\n\nEl cliente_id debe proceder de una respuesta válida\ndel registro o consulta del cliente, nunca inventarse.\n\nLa fecha_inicio debe proceder exactamente de un\nhorario devuelto por ver_disponibilidad.\n\nLa reserva tiene una duración temporal de 15 minutos.\n\nNo confirma el pago ni la cita definitiva.\n\nSi la herramienta devuelve ok=true y un estado\nRESERVA_TEMPORAL, comunica que el horario quedó\nreservado temporalmente.\n\nSi devuelve ok=false, no afirmes que se creó la\nreserva. Explica el problema y ofrece consultar\notra disponibilidad.\n\nNunca crees reservas cuando el usuario solamente\nesté preguntando por precios u horarios.",
+        "method": "POST",
+        "url": "http://host.docker.internal:3000/citas/reservar",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "canal_id",
+              "value": "={{ $('resolver_contexto').first().json.canal.identificador }}"
+            },
+            {
+              "name": "cliente_id",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters1_Value', `Identificador numérico real del cliente registrado.\n\nObtén este valor de la respuesta real de registrar_paciente,\nutilizando cliente.Id o lead.Id.\n\nNunca inventes identificadores.\nNo utilices usuario_id como cliente_id.`, 'string') }}"
+            },
+            {
+              "name": "servicio_id",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters2_Value', `Identificador numérico del servicio solicitado.\n\nDebe provenir de consultar_servicios.\nUtiliza exclusivamente un servicio asociado al profesional actual.\n\nNunca inventes identificadores.`, 'string') }}"
+            },
+            {
+              "name": "fecha_inicio",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters3_Value', `Fecha y hora exactas seleccionadas por el cliente.\n\nDebes utilizar el valor fechaInicio devuelto por\nver_disponibilidad.\n\nFormato obligatorio: ISO 8601 con zona horaria.\n\nEjemplo de formato:\n2026-10-15T10:00:00.000-05:00\n\nEl ejemplo solo representa el formato.\nNunca inventes horarios ni utilices fechas\nque no hayan sido verificadas.`, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.5,
+      "position": [
+        288,
+        128
+      ],
+      "id": "999a8588-9322-47ea-87b0-b4ced78b0466",
+      "name": "crear_reserva"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Crea o recupera una solicitud de pago para una reserva temporal del canal actual. Úsala únicamente después de que crear_reserva haya devuelto una reserva válida. El cita_id debe provenir exactamente de reserva.id en esa respuesta. No confirma el pago ni la cita; solo deja la reserva en estado pendiente de pago.",
+        "method": "POST",
+        "url": "http://host.docker.internal:3000/pagos/solicitar",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "canal_id",
+              "value": "={{ $('resolver_contexto').first().json.canal.identificador }}"
+            },
+            {
+              "name": "cita_id",
+              "value": "="
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.5,
+      "position": [
+        880,
+        112
+      ],
+      "id": "7d9c4c66-0c09-447c-aa88-863fc46ced0a",
+      "name": "solicitar_pago_borrador"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Crea o recupera una solicitud de pago para una reserva temporal del canal actual. Úsala únicamente después de que crear_reserva haya devuelto una reserva válida. El cita_id debe provenir exactamente de reserva.id en esa respuesta. No confirma el pago ni la cita; solo deja la reserva en estado pendiente de pago.",
+        "method": "POST",
+        "url": "http://host.docker.internal:3000/pagos/solicitar",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "canal_id",
+              "value": "={{ $('resolver_contexto').first().json.canal.identificador }}"
+            },
+            {
+              "name": "cita_id",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters1_Value', `Identificador numérico real de la reserva temporal. Debe provenir exactamente de reserva.id devuelto por crear_reserva. Nunca inventes identificadores.`, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.5,
+      "position": [
+        96,
+        128
+      ],
+      "id": "99acdd57-d397-4406-a934-59dc85bc725e",
+      "name": "solicitar_pago"
     }
   ],
+  "pinData": {},
   "connections": {
     "Webhook Postman": {
       "main": [
         [
-          { "node": "AI Agent", "type": "main", "index": 0 }
+          {
+            "node": "resolver_contexto",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
     "Google Gemini Chat Model": {
       "ai_languageModel": [
-        [
-          { "node": "AI Agent", "type": "ai_languageModel", "index": 0 }
-        ]
+        []
       ]
     },
     "Memoria de conversacion": {
       "ai_memory": [
         [
-          { "node": "AI Agent", "type": "ai_memory", "index": 0 }
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
         ]
       ]
     },
     "AI Agent": {
       "main": [
         [
-          { "node": "Respond to Webhook", "type": "main", "index": 0 }
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "consultar_servicios": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ver_disponibilidad": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "resolver_contexto": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "registrar_paciente": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "crear_reserva": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "solicitar_pago": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
         ]
       ]
     }
-  }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "56cfba40-3275-4e68-8df9-d7a5a5e05e2d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "11f6d854111b4d36db5cffc9033320fdb59a42ccac6b54f822c076aa08d60d8e"
+  },
+  "nodeGroups": [],
+  "id": "7yAhr9Ppgt9OkkPu",
+  "tags": []
 }

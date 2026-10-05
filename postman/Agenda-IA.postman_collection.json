@@ -1,93 +1,115 @@
 {
   "info": {
-    "name": "Agenda IA - Pruebas",
-    "description": "Pruebas del flujo Postman -> n8n -> IA -> Backend",
+    "name": "Agenda IA - Pruebas MVP",
+    "description": "Pruebas del flujo n8n, reservas y simulador de pagos.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "webhook_url", "value": "http://localhost:5678/webhook/chat-agenda" },
-    { "key": "backend_url", "value": "http://localhost:3000" }
+    { "key": "backend_url", "value": "http://localhost:3000" },
+    { "key": "canal_id", "value": "wa-ana-demo" },
+    { "key": "usuario_id", "value": "postman-cliente-001" },
+    { "key": "cliente_id", "value": "43" },
+    { "key": "servicio_id", "value": "7" },
+    { "key": "fecha_inicio", "value": "2026-10-15T10:00:00.000-05:00" },
+    { "key": "cita_id", "value": "" },
+    { "key": "referencia_cobro", "value": "" },
+    { "key": "monto_esperado", "value": "" },
+    { "key": "pago_simulador_secreto", "value": "agendaia-simulador-local" }
   ],
   "item": [
     {
-      "name": "n8n - Flujo del agente",
+      "name": "n8n - Conversación",
       "item": [
         {
-          "name": "1. Saludo inicial",
+          "name": "1. Saludo",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"canal\": \"postman\",\n  \"usuario_id\": \"111\",\n  \"texto\": \"Hola, buenas!\"\n}"
-            },
+            "body": { "mode": "raw", "raw": "{\n  \"canal_id\": \"{{canal_id}}\",\n  \"usuario_id\": \"{{usuario_id}}\",\n  \"texto\": \"Hola, quisiera una limpieza dental.\"\n}" },
             "url": "{{webhook_url}}"
           }
         },
         {
-          "name": "2. Pregunta por servicios",
+          "name": "2. Consultar horarios",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"canal\": \"postman\",\n  \"usuario_id\": \"111\",\n  \"texto\": \"Cuanto cuesta una consulta general?\"\n}"
-            },
-            "url": "{{webhook_url}}"
-          }
-        },
-        {
-          "name": "3. Pregunta por otro servicio",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"canal\": \"postman\",\n  \"usuario_id\": \"111\",\n  \"texto\": \"Y una inyeccion cuanto vale?\"\n}"
-            },
-            "url": "{{webhook_url}}"
-          }
-        },
-        {
-          "name": "4. Registrar lead (nombre y telefono)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"canal\": \"postman\",\n  \"usuario_id\": \"111\",\n  \"texto\": \"Me llamo Juan Perez, mi telefono es 0991234567\"\n}"
-            },
-            "url": "{{webhook_url}}"
-          }
-        },
-        {
-          "name": "5. Otro paciente nuevo (usuario_id distinto)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"canal\": \"postman\",\n  \"usuario_id\": \"222\",\n  \"texto\": \"Buenas, quisiera saber los servicios que ofrecen\"\n}"
-            },
+            "body": { "mode": "raw", "raw": "{\n  \"canal_id\": \"{{canal_id}}\",\n  \"usuario_id\": \"{{usuario_id}}\",\n  \"texto\": \"¿Qué horarios tienen el 15 de octubre?\"\n}" },
             "url": "{{webhook_url}}"
           }
         }
       ]
     },
     {
-      "name": "Backend directo (debug)",
+      "name": "Backend - Reserva",
       "item": [
         {
           "name": "Health check",
           "request": { "method": "GET", "url": "{{backend_url}}/health" }
         },
         {
-          "name": "Ver servicios",
-          "request": { "method": "GET", "url": "{{backend_url}}/servicios" }
+          "name": "Resolver canal",
+          "request": { "method": "GET", "url": "{{backend_url}}/contexto/canal/{{canal_id}}" }
         },
         {
-          "name": "Ver leads registrados",
-          "request": { "method": "GET", "url": "{{backend_url}}/leads" }
+          "name": "Consultar disponibilidad",
+          "request": { "method": "GET", "url": "{{backend_url}}/disponibilidad?profesionalId=2&servicioId={{servicio_id}}&desde=2026-10-15&dias=1" }
+        },
+        {
+          "name": "Crear reserva temporal",
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["const body = pm.response.json();", "if (body.ok) pm.collectionVariables.set('cita_id', body.reserva.id);"] }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"canal_id\": \"{{canal_id}}\",\n  \"cliente_id\": {{cliente_id}},\n  \"servicio_id\": {{servicio_id}},\n  \"fecha_inicio\": \"{{fecha_inicio}}\"\n}" },
+            "url": "{{backend_url}}/citas/reservar"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Backend - Pago simulado",
+      "item": [
+        {
+          "name": "Crear solicitud de pago",
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["const body = pm.response.json();", "if (body.ok) {", "  pm.collectionVariables.set('referencia_cobro', body.pago.referenciaCobro);", "  pm.collectionVariables.set('monto_esperado', body.pago.montoEsperado);", "}"] }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"canal_id\": \"{{canal_id}}\",\n  \"cita_id\": {{cita_id}}\n}" },
+            "url": "{{backend_url}}/pagos/solicitar"
+          }
+        },
+        {
+          "name": "Webhook simulado aprobado",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-pago-simulador-secreto", "value": "{{pago_simulador_secreto}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"evento_id\": \"sim-postman-001\",\n  \"referencia_cobro\": \"{{referencia_cobro}}\",\n  \"monto\": {{monto_esperado}}\n}" },
+            "url": "{{backend_url}}/webhooks/pagos/simulador"
+          }
+        },
+        {
+          "name": "Webhook repetido: idempotencia",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-pago-simulador-secreto", "value": "{{pago_simulador_secreto}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"evento_id\": \"sim-postman-001\",\n  \"referencia_cobro\": \"{{referencia_cobro}}\",\n  \"monto\": {{monto_esperado}}\n}" },
+            "url": "{{backend_url}}/webhooks/pagos/simulador"
+          }
         }
       ]
     }

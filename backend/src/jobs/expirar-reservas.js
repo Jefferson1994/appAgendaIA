@@ -4,6 +4,9 @@
 // =====================================================
 
 const prisma = require('../shared/prisma');
+const {
+  expirarReservasVencidas: expirarEnBaseDeDatos
+} = require('../shared/reservas');
 
 // Revisar cada 60 segundos.
 const INTERVALO_REVISION_MS = 60 * 1000;
@@ -29,35 +32,17 @@ async function expirarReservasVencidas() {
 
   try {
 
-    const ahora = new Date();
+    const resultado = await expirarEnBaseDeDatos(prisma);
 
-    const resultado = await prisma.cita.updateMany({
-
-      where: {
-
-        estado: 'RESERVA_TEMPORAL',
-
-        fechaExpiracionReserva: {
-          lte: ahora
-        }
-
-      },
-
-      data: {
-        estado: 'EXPIRADA'
-      }
-
-    });
-
-    if (resultado.count > 0) {
+    if (resultado.citasExpiradas > 0 || resultado.pagosExpirados > 0) {
 
       console.log(
-        `[Agenda IA] Reservas expiradas: ${resultado.count}`
+        `[Agenda IA] Reservas expiradas: ${resultado.citasExpiradas}; solicitudes expiradas: ${resultado.pagosExpirados}`
       );
 
     }
 
-    return resultado.count;
+    return resultado;
 
   } catch (error) {
 
