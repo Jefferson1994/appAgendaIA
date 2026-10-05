@@ -3,12 +3,18 @@ const cors = require('cors');
 
 const pacientesRoutes = require('./routes/pacientes.routes');
 const PacientesPaths = require('./routes/paths/PacientesPaths');
-const serviciosRoutes = require('./modules/servicios/servicios.routes');
-const disponibilidadRoutes = require('./modules/disponibilidad/disponibilidad.routes');
-const contextoRoutes = require('./modules/contexto/contexto.routes');
-const citasRoutes = require('./modules/citas/citas.routes');
-const pagosRoutes = require('./modules/pagos/pagos.routes');
-const pagosWebhooksRoutes = require('./modules/pagos/pagos.webhooks.routes');
+const serviciosRoutes = require('./routes/servicios.routes');
+const ServiciosPaths = require('./routes/paths/ServiciosPaths');
+const disponibilidadRoutes = require('./routes/disponibilidad.routes');
+const DisponibilidadPaths = require('./routes/paths/DisponibilidadPaths');
+const contextoRoutes = require('./routes/contexto.routes');
+const ContextoPaths = require('./routes/paths/ContextoPaths');
+const citasRoutes = require('./routes/citas.routes');
+const CitasPaths = require('./routes/paths/CitasPaths');
+const pagosRoutes = require('./routes/pagos.routes');
+const PagosPaths = require('./routes/paths/PagosPaths');
+const pagosWebhooksRoutes = require('./routes/pagos.webhooks.routes');
+const WebhooksPagosPaths = require('./routes/paths/WebhooksPagosPaths');
 const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
@@ -21,12 +27,12 @@ app.get('/health', (req, res) => res.json({
 }));
 
 app.use(PacientesPaths.BASE, pacientesRoutes);
-app.use('/servicios', serviciosRoutes);
-app.use('/disponibilidad', disponibilidadRoutes);
-app.use('/contexto', contextoRoutes);
-app.use('/citas', citasRoutes);
-app.use('/pagos', pagosRoutes);
-app.use('/webhooks/pagos', pagosWebhooksRoutes);
+app.use(ServiciosPaths.BASE, serviciosRoutes);
+app.use(DisponibilidadPaths.BASE, disponibilidadRoutes);
+app.use(ContextoPaths.BASE, contextoRoutes);
+app.use(CitasPaths.BASE, citasRoutes);
+app.use(PagosPaths.BASE, pagosRoutes);
+app.use(WebhooksPagosPaths.BASE, pagosWebhooksRoutes);
 
 // Debe ir al final de las rutas.
 app.use(errorHandler);

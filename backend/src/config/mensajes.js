@@ -53,5 +53,11 @@ module.exports = {
   // Webhook del simulador
   SIMULADOR_NO_DISPONIBLE: 'El simulador de pagos no está disponible en producción',
   SIMULADOR_SIN_CONFIGURAR: 'Configura PAGO_SIMULADOR_SECRETO para usar el simulador',
-  WEBHOOK_NO_AUTORIZADO: 'El secreto del simulador no es válido'
+  WEBHOOK_NO_AUTORIZADO: 'El secreto del simulador no es válido',
+  SERVICIO_OK: 'Servicio obtenido correctamente',
+  CONTEXTO_OK: 'Contexto del canal obtenido correctamente',
+  FECHA_INICIO_INVALIDA: 'fecha_inicio no es válida',
+  OBSERVACION_PAGO_CONFIRMADO: 'Pago confirmado por el simulador local.',
+  OBSERVACION_MONTO_DISTINTO: 'El monto recibido no coincide con el monto esperado.',
+  EVENTO_PAGO_PROCESADO: 'Evento de pago procesado',
 };

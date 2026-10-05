@@ -1,4 +1,3 @@
-// Forma del paciente hacia afuera. Mantiene el formato que ya consume n8n.
 class PacienteEB {
   constructor(cliente) {
     this.Id = cliente.id;

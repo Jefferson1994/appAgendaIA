@@ -19,4 +19,10 @@ function crear({ organizacionId, nombre, telefono, direccion }, db = prisma) {
   });
 }
 
-module.exports = { listarActivosPorOrganizacion, buscarPorTelefono, crear };
+function buscarActivoPorId(organizacionId, id, db = prisma) {
+  return db.cliente.findFirst({
+    where: { id, organizacionId, activo: true }
+  });
+}
+
+module.exports = { listarActivosPorOrganizacion, buscarPorTelefono, buscarActivoPorId, crear };
