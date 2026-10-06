@@ -16,10 +16,13 @@ const PagosPaths = require('./routes/paths/PagosPaths');
 const pagosWebhooksRoutes = require('./routes/pagos.webhooks.routes');
 const WebhooksPagosPaths = require('./routes/paths/WebhooksPagosPaths');
 const errorHandler = require('./middlewares/errorHandler');
+const { limitadorGeneral, limitadorEscritura } = require('./middlewares/limitadores');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(limitadorGeneral);
+app.post('*', limitadorEscritura);
 
 app.get('/health', (req, res) => res.json({
   ok: true,

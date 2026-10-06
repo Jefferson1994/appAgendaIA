@@ -60,4 +60,5 @@ module.exports = {
   OBSERVACION_PAGO_CONFIRMADO: 'Pago confirmado por el simulador local.',
   OBSERVACION_MONTO_DISTINTO: 'El monto recibido no coincide con el monto esperado.',
   EVENTO_PAGO_PROCESADO: 'Evento de pago procesado',
+  DEMASIADAS_PETICIONES: 'Demasiadas peticiones, intenta de nuevo en un momento',
 };
