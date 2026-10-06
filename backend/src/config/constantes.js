@@ -72,6 +72,6 @@ module.exports = {
   },
   LIMITES: {
     GENERAL: { ventanaMs: 60 * 1000, maximo: 300 },
-    ESCRITURA: { ventanaMs: 60 * 1000, maximo: 3 }
+    ESCRITURA: { ventanaMs: 60 * 1000, maximo: 30}
   }
 };
