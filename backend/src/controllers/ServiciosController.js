@@ -5,8 +5,10 @@ const MSG = require('../config/mensajes');
 const { ok } = require('../utils/respuesta');
 
 async function listar(req, res) {
-  const { profesionalId, texto } = ServicioRequest.validarListar(req.query);
-  const { profesional, relaciones } = await ServiciosService.listar(profesionalId, texto);
+  const { profesionalId, canalId, texto } = ServicioRequest.validarListar(req.query);
+  const { profesional, relaciones } = canalId
+    ? await ServiciosService.listarPorCanal(canalId, texto)
+    : await ServiciosService.listar(profesionalId, texto);
 
   return ok(
     res,

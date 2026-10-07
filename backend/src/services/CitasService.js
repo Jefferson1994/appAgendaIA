@@ -6,6 +6,7 @@ const { HTTP, ZONA_HORARIA_DEFECTO, TRANSACCION_OPCIONES } = require('../config/
 const { calcularExpiracionReserva, expirarReservasVencidas } = require('../shared/reservas');
 const CanalesService = require('./CanalesService');
 const DisponibilidadService = require('./DisponibilidadService');
+const PagosService = require('./PagosService');
 const PacientesRepository = require('../repositories/PacientesRepository');
 const ServiciosRepository = require('../repositories/ServiciosRepository');
 const CitasRepository = require('../repositories/CitasRepository');
@@ -55,7 +56,21 @@ async function crearReservaTemporal({ canalId, clienteId, servicioId, fechaInici
       tx
     );
     if (anterior) {
-      return { cita: anterior, profesional, servicio: relacion.servicio, zonaHoraria, creada: false };
+      const pago = await crearPagoAutomatico({
+        cita: anterior,
+        servicio: relacion.servicio,
+        db: tx
+      });
+
+      return {
+        cita: pago.cita,
+        profesional,
+        servicio: relacion.servicio,
+        zonaHoraria,
+        creada: false,
+        pago: pago.pago,
+        pagoCreado: pago.creada
+      };
     }
 
     // La disponibilidad se consulta dentro de la transacción, después del bloqueo.
@@ -94,8 +109,29 @@ async function crearReservaTemporal({ canalId, clienteId, servicioId, fechaInici
       tx
     );
 
-    return { cita, profesional, servicio, zonaHoraria, creada: true };
+    const pago = await crearPagoAutomatico({ cita, servicio, db: tx });
+
+    return {
+      cita: pago.cita,
+      profesional,
+      servicio,
+      zonaHoraria,
+      creada: true,
+      pago: pago.pago,
+      pagoCreado: pago.creada
+    };
   }, TRANSACCION_OPCIONES);
+}
+
+async function crearPagoAutomatico({ cita, servicio, db }) {
+  const requierePagoPrevio =
+    servicio.requierePagoPrevio || Number(servicio.porcentajeAnticipo ?? 0) > 0;
+
+  if (!requierePagoPrevio) {
+    return { cita, pago: null, creada: false };
+  }
+
+  return PagosService.crearSolicitudPendienteParaCita({ ...cita, servicio }, db);
 }
 
 module.exports = { crearReservaTemporal };

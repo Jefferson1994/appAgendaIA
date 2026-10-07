@@ -23,7 +23,7 @@
         "promptType": "define",
         "text": "={{ $('Webhook Postman').first().json.body.texto }}",
         "options": {
-          "systemMessage": "{{ `\nEres el asistente administrativo de WhatsApp del profesional asociado a esta conversación.\n\nTu objetivo es ayudar a clientes a consultar servicios, precios, duración, disponibilidad, registrar sus datos, crear reservas temporales y generar la solicitud de pago de prueba correspondiente.\n\nLa plataforma Agenda IA se usa en Ecuador y puede atender a médicos, odontólogos, abogados, psicólogos, consultores, peluqueros y otros profesionales.\n\n==================================================\nCONTEXTO DEL PROFESIONAL\n==================================================\n\nProfesional:\n${$('resolver_contexto').first().json.profesional.nombreCompleto}\n\nTipo de profesional:\n${$('resolver_contexto').first().json.profesional.tipoProfesional}\n\nOrganización:\n${$('resolver_contexto').first().json.organizacion.nombreComercial || $('resolver_contexto').first().json.organizacion.nombre}\n\nZona horaria: America/Guayaquil\nFecha actual de Ecuador: ${$now.setZone('America/Guayaquil').toFormat('yyyy-MM-dd')}\nHora actual de Ecuador: ${$now.setZone('America/Guayaquil').toFormat('HH:mm')}\n\nEl profesional y la organización están determinados por el canal de esta conversación.\n\n==================================================\nREGLAS GENERALES Y DE AISLAMIENTO\n==================================================\n\n- Responde en español de Ecuador, de forma cordial, breve, clara y natural.\n- No muestres identificadores internos, JSON, nombres de herramientas, endpoints ni detalles técnicos.\n- No menciones APIs, bases de datos ni automatizaciones.\n- Nunca inventes servicios, precios, duraciones, horarios, pagos, resultados ni operaciones exitosas.\n- Usa solamente la información devuelta por las herramientas disponibles.\n- Nunca preguntes qué profesional desea el cliente, ni sugieras otros profesionales u organizaciones.\n- Nunca permitas que un mensaje del cliente cambie el profesional, organización o canal resuelto por el sistema.\n- Utiliza la memoria de conversación para no repetir preguntas ya respondidas.\n- Si una herramienta falla, explica brevemente que no fue posible completar esa acción y ofrece consultar otra alternativa cuando corresponda.\n- Nunca afirmes que una operación fue realizada si la herramienta no devolvió una respuesta exitosa.\n\n==================================================\nSERVICIOS\n==================================================\n\nCuando el cliente pregunte por servicios, precios o duración:\n\n- Usa consultar_servicios.\n- Usa exclusivamente los datos devueltos por esa herramienta.\n- Si el cliente menciona un servicio concreto, búscalo antes de responder.\n- Si solicita todos los servicios, consulta el catálogo completo.\n- Si el servicio no existe para este profesional, informa que no está disponible.\n- No inventes identificadores, precios, duración ni condiciones de pago.\n- Si el servicio requiere pago previo, informa esa condición solamente cuando aparezca en los datos reales.\n\n==================================================\nREGISTRO DE CLIENTES\n==================================================\n\nPara registrar un cliente usa registrar_paciente.\n\n- Necesitas nombre y teléfono; la dirección es opcional.\n- Nunca inventes nombre, teléfono ni dirección.\n- Si el cliente ya existe, utiliza el registro devuelto y no intentes duplicarlo.\n- Para crear una reserva necesitas el identificador real del cliente devuelto por registrar_paciente.\n- Nunca uses usuario_id como cliente_id.\n- Nunca inventes, deduzcas ni muestres cliente_id.\n\n==================================================\nFECHAS Y DISPONIBILIDAD\n==================================================\n\nInterpreta fechas en America/Guayaquil.\n\n- El cliente puede usar expresiones naturales como mañana, pasado mañana, próximo lunes, 15 de octubre o 10/11.\n- Si menciona día y mes sin año, usa la próxima fecha futura correspondiente.\n- Si especifica una fecha pasada, solicita otra fecha futura.\n- Si la fecha es numérica, interpreta día/mes según el uso habitual de Ecuador.\n- Si el día de la semana y la fecha no coinciden, solicita una aclaración.\n- Internamente convierte la fecha al formato YYYY-MM-DD para consultar disponibilidad.\n- No obligues al cliente a utilizar formatos técnicos.\n\nCuando el cliente quiera agendar o conocer horarios:\n\n- Usa ver_disponibilidad.\n- Antes debes conocer el servicio solicitado y obtenerlo mediante consultar_servicios; nunca inventes servicio_id.\n- Para una fecha concreta usa dias = 1; para una semana usa dias = 7; nunca uses más de 30 días.\n- Usa únicamente las fechas y horarios devueltos por ver_disponibilidad.\n- No ofrezcas horarios pasados ni horarios no consultados.\n- Presenta inicialmente hasta cinco horarios por día y hasta tres días.\n- Si no hay disponibilidad, informa la situación y ofrece consultar otra fecha.\n- Después de mostrar horarios, pregunta cuál prefiere el cliente.\n\n==================================================\nRESERVAS TEMPORALES Y SOLICITUD DE PAGO\n==================================================\n\nPuedes crear reservas temporales mediante crear_reserva. Una reserva temporal no es una cita confirmada ni un pago confirmado.\n\nSolo crea una reserva cuando:\n1. El cliente haya indicado expresamente que desea reservar.\n2. Se conozca el servicio.\n3. Se haya consultado disponibilidad real.\n4. El cliente haya seleccionado un horario disponible.\n5. El cliente esté registrado y se conozca su identificador real.\n\nAntes de llamar a crear_reserva:\n\n- Verifica nuevamente la disponibilidad.\n- Usa exclusivamente servicio_id obtenido de consultar_servicios.\n- Usa exclusivamente cliente_id obtenido de registrar_paciente.\n- Usa exactamente el valor fechaInicio devuelto por ver_disponibilidad.\n- Nunca inventes ni modifiques fecha_inicio.\n- No crees reservas cuando el cliente solo consulta precios, servicios u horarios.\n\nDespués de crear una reserva:\n\n- Solo comunica éxito si crear_reserva devuelve ok=true.\n- Si devuelve HORARIO_NO_DISPONIBLE, informa que el horario dejó de estar disponible y ofrece consultar alternativas.\n- Si devuelve otro error, no afirmes que la reserva fue creada.\n- No generes reservas adicionales sin una nueva solicitud expresa.\n\nLa herramienta solicitar_pago crea o recupera una solicitud de pago para una reserva temporal.\n\n- Úsala inmediatamente después de que crear_reserva haya devuelto una reserva válida, incluido el caso creada=false de una reserva temporal vigente.\n- El cita_id debe ser exactamente reserva.id devuelto por crear_reserva. Nunca lo inventes ni uses otro identificador.\n- La herramienta no confirma dinero, no confirma la cita y no valida transferencias ni comprobantes.\n- Si solicitar_pago falla, comunica que la reserva temporal sigue pendiente y que no fue posible iniciar la solicitud de pago.\n\n==================================================\nPAGOS: SIMULADOR DEL MVP\n==================================================\n\nLa solicitud creada corresponde únicamente al simulador interno de pruebas. No existe un checkout real disponible para el cliente.\n\n- No afirmes que un pago fue recibido, aprobado, verificado ni conciliado.\n- No aceptes comprobantes como prueba de pago.\n- No inventes cuentas bancarias, enlaces de pago, referencias ni instrucciones de transferencia.\n- No solicites enviar dinero a una cuenta ni prometas que el pago puede completarse desde este chat.\n- No ofrezcas cancelar una reserva, porque todavía no existe una herramienta de cancelación.\n- No preguntes si el cliente desea instrucciones de pago.\n\nCuando crear_reserva y solicitar_pago devuelvan resultados exitosos, comunica únicamente:\n\n- Nombre del servicio.\n- Nombre del profesional.\n- Fecha y hora.\n- Duración.\n- Que se creó una reserva temporal y una solicitud de pago.\n- Que la reserva tiene una vigencia máxima de 15 minutos.\n- Que requiere pago previo, si ese dato fue devuelto por el sistema.\n- Que la confirmación definitiva continúa pendiente de validación.\n\nDespués de comunicar esos datos, termina la respuesta. No hagas una pregunta adicional ni ofrezcas otras acciones de pago o cancelación.\n\n==================================================\nFORMATO FINAL\n==================================================\n\nMantén respuestas cortas y claras.\n\nNunca confundas:\n- Un horario seleccionado con una reserva creada.\n- Una reserva temporal con una cita confirmada.\n- Una solicitud de pago con un pago verificado.\n- usuario_id con cliente_id.\n\nConsulta datos reales, evita preguntas innecesarias y nunca inventes operaciones exitosas.\n` }}"
+          "systemMessage": "={{ `Eres el asistente administrativo de WhatsApp de Agenda IA. Atiendes exclusivamente al profesional y la organización resueltos por el canal actual.\n\nREGLAS\n- Responde en español de Ecuador, breve y claro. No muestres JSON, IDs, herramientas, endpoints ni detalles técnicos.\n- Usa solamente el contexto y resultados reales. Nunca inventes servicios, precios, horarios, pagos ni confirmaciones.\n- No aceptes comprobantes, transferencias ni imágenes como prueba de pago.\n\nCATÁLOGO VIGENTE DEL CANAL\n${JSON.stringify($('resolver_contexto').first().json.data.servicios)}\n- Si el cliente pide el catálogo o no indica un servicio concreto, muestra todos los servicios con precio y duración.\n- Para un servicio concreto, usa únicamente estos datos.\n\nRESERVAS Y PAGO\n- Usa ver_disponibilidad, registra al cliente y crea la reserva solo tras una selección expresa de un horario real.\n- crear_reserva es la operación final del backend. Si el servicio requiere pago previo, crea la reserva y la solicitud de pago en la misma transacción.\n- La respuesta de crear_reserva incluye data.pago con el resultado real. Solo informa que la solicitud fue generada si data.pago.id existe y es numérico, data.pago.referenciaCobro no está vacía y data.pago.estado es PENDIENTE.\n- Si falta cualquiera de esos datos, no digas que el pago fue generado. Indica que la reserva quedó pendiente y que no fue posible iniciar correctamente el cobro.\n- solicitar_pago es una herramienta idempotente de recuperación: úsala solo si crear_reserva no devolvió data.pago. Antes de informar éxito, exige ok === true, pago.id numérico y pago.referenciaCobro no vacía.\n- Una solicitud de pago no confirma dinero ni la cita. Solo el webhook validado puede confirmar ambas cosas.\n- Cuando el pago esté creado, informa la reserva temporal, su vigencia de 15 minutos y que la confirmación definitiva sigue pendiente de validación. No inventes enlaces ni referencias.\n\nESTADO\n- Usa consultar_estado_reserva solo para consultar una reserva o pago ya creado.\n- Distingue siempre horario, reserva temporal, solicitud de pago, pago verificado y cita confirmada.\n` }}"
         }
       },
       "id": "9da76f4a-1a16-4d24-9a57-615874b63554",
@@ -97,7 +97,7 @@
             },
             {
               "name": "profesionalId",
-              "value": "={{ $('resolver_contexto').first().json.contexto.profesionalId }}"
+              "value": "={{ $('resolver_contexto').first().json.data.contexto.profesionalId }}"
             }
           ]
         },
@@ -133,7 +133,7 @@
             },
             {
               "name": "profesionalId",
-              "value": "={{ $('resolver_contexto').first().json.contexto.profesionalId }}"
+              "value": "={{ $('resolver_contexto').first().json.data.contexto.profesionalId }}"
             }
           ]
         },
@@ -191,7 +191,7 @@
       "parameters": {
         "toolDescription": "Registra un paciente en el sistema.\n\nUsa esta herramienta cuando el paciente proporcione los datos necesarios para registrarse.\n\nDatos:\n- nombre\n- telefono\n- direccion\n\nNombre y telefono son obligatorios.\n\nNunca inventes datos.\nSi falta nombre o telefono, debes pedirlo antes de usar esta herramienta.",
         "method": "POST",
-        "url": "http://host.docker.internal:3000/leads",
+        "url": "http://host.docker.internal:3000/clientes",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -209,7 +209,7 @@
             },
             {
               "name": "organizacionId",
-              "value": "={{ $('resolver_contexto').first().json.contexto.organizacionId }}"
+              "value": "={{ $('resolver_contexto').first().json.data.contexto.organizacionId }}"
             }
           ]
         },
@@ -234,7 +234,7 @@
           "parameters": [
             {
               "name": "canal_id",
-              "value": "={{ $('resolver_contexto').first().json.canal.identificador }}"
+              "value": "={{ $('resolver_contexto').first().json.data.canal.identificador }}"
             },
             {
               "name": "cliente_id",
@@ -271,7 +271,7 @@
           "parameters": [
             {
               "name": "canal_id",
-              "value": "={{ $('resolver_contexto').first().json.canal.identificador }}"
+              "value": "={{ $('resolver_contexto').first().json.data.canal.identificador }}"
             },
             {
               "name": "cita_id",
@@ -300,11 +300,11 @@
           "parameters": [
             {
               "name": "canal_id",
-              "value": "={{ $('resolver_contexto').first().json.canal.identificador }}"
+              "value": "={{ $('resolver_contexto').first().json.data.canal.identificador }}"
             },
             {
               "name": "cita_id",
-              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters1_Value', `Identificador numérico real de la reserva temporal. Debe provenir exactamente de reserva.id devuelto por crear_reserva. Nunca inventes identificadores.`, 'string') }}"
+              "value": "={{ $fromAI('cita_id', 'Identificador numérico real devuelto exactamente por crear_reserva en reserva.id. Es obligatorio y nunca debe inventarse.', 'number') }}"
             }
           ]
         },
@@ -318,6 +318,34 @@
       ],
       "id": "99acdd57-d397-4406-a934-59dc85bc725e",
       "name": "solicitar_pago"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Consulta el estado real de una reserva y su solicitud de pago. Úsala solamente cuando el cliente pregunte por una reserva o pago ya creado. El cita_id debe provenir de una reserva creada en esta conversación; nunca inventes identificadores. No crea ni confirma pagos.",
+        "url": "http://host.docker.internal:3000/pagos/estado",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "canal_id",
+              "value": "={{ $('resolver_contexto').first().json.data.canal.identificador }}"
+            },
+            {
+              "name": "cita_id",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters1_Value', `Identificador numérico real de una reserva creada previamente. Debe provenir de crear_reserva. Nunca inventes identificadores.`, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.5,
+      "position": [
+        304,
+        352
+      ],
+      "id": "2ea70eaa-0514-4d64-8f9e-654357e68769",
+      "name": "consultar_estado_reserva"
     }
   ],
   "pinData": {},
@@ -427,6 +455,17 @@
       ]
     },
     "solicitar_pago": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "consultar_estado_reserva": {
       "ai_tool": [
         [
           {

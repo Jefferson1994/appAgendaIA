@@ -40,6 +40,37 @@ function calcularSolicitudCobro(cita) {
   };
 }
 
+async function crearSolicitudPendienteParaCita(cita, db) {
+  const pagoVigente = await PagosRepository.buscarPendientePorCita(cita.id, db);
+  if (pagoVigente) {
+    return { pago: pagoVigente, creada: false, cita };
+  }
+
+  const solicitud = calcularSolicitudCobro(cita);
+  const pago = await PagosRepository.crear(
+    {
+      organizacionId: cita.organizacionId,
+      citaId: cita.id,
+      montoEsperado: solicitud.montoEsperado,
+      metodo: METODO_PAGO.PASARELA,
+      estado: ESTADOS_PAGO.PENDIENTE,
+      referenciaCobro: `${PREFIJO_REFERENCIA_COBRO}${cita.id}-${crypto.randomUUID().replaceAll('-', '')}`,
+      proveedor: PROVEEDOR_PAGO.SIMULADOR,
+      moneda: MONEDA_DEFECTO,
+      porcentajeAnticipoAplicado: solicitud.porcentaje,
+      fechaExpiracion: cita.fechaExpiracionReserva
+    },
+    db
+  );
+
+  const citaActualizada =
+    cita.estado === ESTADOS_CITA.RESERVA_TEMPORAL
+      ? await CitasRepository.actualizar(cita.id, { estado: ESTADOS_CITA.PENDIENTE_PAGO }, db)
+      : cita;
+
+  return { pago, creada: true, cita: citaActualizada };
+}
+
 async function solicitarPago({ canalId, citaId }) {
   const canal = await CanalesService.resolverCanalActivo(canalId);
 
@@ -47,10 +78,15 @@ async function solicitarPago({ canalId, citaId }) {
     await BloqueosRepository.bloquearProfesional(tx, canal.profesionalId);
     await expirarReservasVencidas(tx, canal.profesionalId);
 
-    const cita = await CitasRepository.buscarParaPago(
-      { id: citaId, organizacionId: canal.organizacionId, profesionalId: canal.profesionalId },
-      tx
-    );
+    const cita = citaId
+      ? await CitasRepository.buscarParaPago(
+          { id: citaId, organizacionId: canal.organizacionId, profesionalId: canal.profesionalId },
+          tx
+        )
+      : await CitasRepository.buscarUltimaPorTelefono(
+          { organizacionId: canal.organizacionId, profesionalId: canal.profesionalId, telefono },
+          tx
+        );
 
     if (!cita) {
       throw new AppError(MSG.CITA_NO_ENCONTRADA, HTTP.NO_ENCONTRADO);
@@ -65,35 +101,35 @@ async function solicitarPago({ canalId, citaId }) {
       throw new AppError(MSG.CITA_NO_PUEDE_PAGAR, HTTP.CONFLICTO);
     }
 
-    // Si ya hay una solicitud pendiente para esta reserva, se devuelve la misma.
-    const pagoVigente = await PagosRepository.buscarPendientePorCita(cita.id, tx);
-    if (pagoVigente) {
-      return { pago: pagoVigente, creada: false };
-    }
-
-    const solicitud = calcularSolicitudCobro(cita);
-    const pago = await PagosRepository.crear(
-      {
-        organizacionId: cita.organizacionId,
-        citaId: cita.id,
-        montoEsperado: solicitud.montoEsperado,
-        metodo: METODO_PAGO.PASARELA,
-        estado: ESTADOS_PAGO.PENDIENTE,
-        referenciaCobro: `${PREFIJO_REFERENCIA_COBRO}${cita.id}-${crypto.randomUUID().replaceAll('-', '')}`,
-        proveedor: PROVEEDOR_PAGO.SIMULADOR,
-        moneda: MONEDA_DEFECTO,
-        porcentajeAnticipoAplicado: solicitud.porcentaje,
-        fechaExpiracion: cita.fechaExpiracionReserva
-      },
-      tx
-    );
-
-    if (cita.estado === ESTADOS_CITA.RESERVA_TEMPORAL) {
-      await CitasRepository.actualizar(cita.id, { estado: ESTADOS_CITA.PENDIENTE_PAGO }, tx);
-    }
-
-    return { pago, creada: true };
+    const resultado = await crearSolicitudPendienteParaCita(cita, tx);
+    return { pago: resultado.pago, creada: resultado.creada };
   }, TRANSACCION_OPCIONES);
 }
 
-module.exports = { solicitarPago };
+async function consultarEstadoReserva({ canalId, citaId, telefono }) {
+  const canal = await CanalesService.resolverCanalActivo(canalId);
+
+  return prisma.$transaction(async (tx) => {
+    await BloqueosRepository.bloquearProfesional(tx, canal.profesionalId);
+    await expirarReservasVencidas(tx, canal.profesionalId);
+
+    const cita = citaId
+      ? await CitasRepository.buscarParaPago(
+          { id: citaId, organizacionId: canal.organizacionId, profesionalId: canal.profesionalId },
+          tx
+        )
+      : await CitasRepository.buscarUltimaPorTelefono(
+          { organizacionId: canal.organizacionId, profesionalId: canal.profesionalId, telefono },
+          tx
+        );
+
+    if (!cita) {
+      throw new AppError(MSG.CITA_NO_ENCONTRADA, HTTP.NO_ENCONTRADO);
+    }
+
+    const pago = await PagosRepository.buscarUltimoPorCita(cita.id, tx);
+    return { cita, pago };
+  }, TRANSACCION_OPCIONES);
+}
+
+module.exports = { solicitarPago, consultarEstadoReserva, crearSolicitudPendienteParaCita };

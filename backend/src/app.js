@@ -3,6 +3,8 @@ const cors = require('cors');
 
 const pacientesRoutes = require('./routes/pacientes.routes');
 const PacientesPaths = require('./routes/paths/PacientesPaths');
+const clientesRoutes = require('./routes/clientes.routes');
+const ClientesPaths = require('./routes/paths/ClientesPaths');
 const serviciosRoutes = require('./routes/servicios.routes');
 const ServiciosPaths = require('./routes/paths/ServiciosPaths');
 const disponibilidadRoutes = require('./routes/disponibilidad.routes');
@@ -30,6 +32,7 @@ app.get('/health', (req, res) => res.json({
 }));
 
 app.use(PacientesPaths.BASE, pacientesRoutes);
+app.use(ClientesPaths.BASE, clientesRoutes);
 app.use(ServiciosPaths.BASE, serviciosRoutes);
 app.use(DisponibilidadPaths.BASE, disponibilidadRoutes);
 app.use(ContextoPaths.BASE, contextoRoutes);

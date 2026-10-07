@@ -52,6 +52,17 @@ function buscarPorId(id, db = prisma) {
   return db.cita.findUnique({ where: { id } });
 }
 
+function buscarUltimaPorTelefono({ organizacionId, profesionalId, telefono }, db = prisma) {
+  return db.cita.findFirst({
+    where: {
+      organizacionId,
+      profesionalId,
+      cliente: { telefono, activo: true }
+    },
+    orderBy: { fechaCreacion: 'desc' }
+  });
+}
+
 function actualizar(id, datos, db = prisma) {
   return db.cita.update({ where: { id }, data: datos });
 }
@@ -62,5 +73,6 @@ module.exports = {
   crearReservaTemporal,
   buscarParaPago,
   buscarPorId,
+  buscarUltimaPorTelefono,
   actualizar
 };

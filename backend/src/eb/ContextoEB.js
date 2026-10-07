@@ -3,7 +3,7 @@ const { ZONA_HORARIA_DEFECTO } = require('../config/constantes');
 
 // Forma del contexto hacia afuera. Mantiene los nombres de campo que ya lee n8n.
 class ContextoEB {
-  constructor(canal) {
+  constructor(canal, servicios = []) {
     const { organizacion, profesional } = canal;
 
     this.canal = {
@@ -44,6 +44,12 @@ class ContextoEB {
       canalIdentificador: canal.identificador,
       zonaHoraria: profesional.zonaHoraria || organizacion.zonaHoraria || ZONA_HORARIA_DEFECTO
     };
+
+    // El flujo conversacional obtiene este contexto una sola vez por mensaje.
+    // Incluir el catálogo que corresponde al canal evita que el agente pierda
+    // la respuesta de una herramienta adicional y conserva el aislamiento
+    // entre profesionales.
+    this.servicios = servicios;
   }
 }
 

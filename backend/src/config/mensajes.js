@@ -49,6 +49,7 @@ module.exports = {
   REFERENCIA_NO_ENCONTRADA: 'La referencia de cobro no existe',
   PAGO_CREADO: 'Solicitud de pago creada en modo simulador.',
   PAGO_EXISTENTE: 'Ya existe una solicitud de pago vigente para esta reserva.',
+  ESTADO_RESERVA_PAGO_OK: 'Estado de reserva y pago obtenido correctamente.',
 
   // Webhook del simulador
   SIMULADOR_NO_DISPONIBLE: 'El simulador de pagos no está disponible en producción',

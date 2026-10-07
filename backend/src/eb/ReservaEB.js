@@ -3,7 +3,7 @@ const { nombreCompleto } = require('../utils/texto');
 
 // Forma de la reserva hacia afuera. Mantiene los nombres de campo que ya lee n8n.
 class ReservaEB {
-  constructor({ cita, profesional, servicio, zonaHoraria, creada }) {
+  constructor({ cita, profesional, servicio, zonaHoraria, creada, pago = null, pagoCreado = false }) {
     const inicio = DateTime.fromJSDate(cita.fechaInicio).setZone(zonaHoraria);
     const fin = DateTime.fromJSDate(cita.fechaFin).setZone(zonaHoraria);
 
@@ -25,6 +25,17 @@ class ReservaEB {
         : null,
       zonaHoraria
     };
+    this.pago = pago
+      ? {
+          id: pago.id,
+          estado: pago.estado,
+          referenciaCobro: pago.referenciaCobro,
+          montoEsperado: Number(pago.montoEsperado),
+          moneda: pago.moneda,
+          fechaExpiracion: pago.fechaExpiracion ? pago.fechaExpiracion.toISOString() : null
+        }
+      : null;
+    this.pagoCreado = pagoCreado;
   }
 }
 

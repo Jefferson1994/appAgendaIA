@@ -1,4 +1,5 @@
 module.exports = {
   BASE: '/pagos',
-  SOLICITAR: '/solicitar'
+  SOLICITAR: '/solicitar',
+  ESTADO: '/estado'
 };
