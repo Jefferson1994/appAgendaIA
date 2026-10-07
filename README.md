@@ -35,16 +35,14 @@ La pasarela real, WhatsApp Cloud API, Google Calendar, recordatorios y el panel 
 ```text
 backend/
   prisma/                         Esquema, seeds y migraciones PostgreSQL.
-  src/modules/
-    contexto/                     Resuelve organización y profesional por canal.
-    pacientes/                    Clientes de una organización.
-    servicios/                    Catálogo por profesional.
-    disponibilidad/               Horarios disponibles reales.
-    citas/                        Reservas temporales.
-    pagos/                        Solicitudes de cobro y webhook simulador.
+  src/controllers/                Entrada HTTP de cada caso de uso.
+  src/services/                   Reglas de negocio y transacciones.
+  src/repositories/               Acceso a datos con Prisma.
+  src/dto/ y src/eb/              Validación de entrada y respuestas HTTP.
+  src/routes/                     Rutas versionables y aliases compatibles.
   src/shared/reservas.js          Estados y vencimiento centralizados.
   src/jobs/expirar-reservas.js    Limpieza periódica de reservas vencidas.
-n8n/workflow-agenda-ia.json       Exportación actual del workflow.
+n8n/workflow-agenda-ia.json       Plantilla versionada del workflow.
 postman/                          Colección para pruebas HTTP.
 ```
 
@@ -99,17 +97,23 @@ El archivo [n8n/workflow-agenda-ia.json](n8n/workflow-agenda-ia.json) correspond
 - `resolver_contexto`.
 - `AI Agent` con OpenAI.
 - Memoria con clave `canal_id:usuario_id`.
-- Herramientas `consultar_servicios`, `registrar_paciente`, `ver_disponibilidad` y `crear_reserva`.
+- Herramientas `consultar_servicios`, `registrar_cliente`, `ver_disponibilidad`, `crear_reserva`, `solicitar_pago` y `consultar_estado_reserva`.
 
-Para restaurarlo en otra instancia, importa el JSON, asigna tu credencial de OpenAI al nodo correspondiente y publica el workflow. Las credenciales se exportan como referencias, nunca con su secreto.
+Para restaurarlo en otra instancia, importa el JSON, asigna tu credencial de OpenAI al nodo correspondiente y publica el workflow. Las credenciales se exportan como referencias, nunca con su secreto. Después de editar el flujo en n8n, usa **More actions → Download** para sustituir esta plantilla por una nueva exportación antes de versionarla.
 
-La herramienta de pago no se conecta todavía al agente: el simulador es exclusivamente para validar el backend antes de tener una URL real de checkout de una pasarela.
+`resolver_contexto` devuelve la respuesta estándar del backend en `data`. Por eso toda expresión de n8n que lea el canal, el profesional, la organización o el catálogo debe partir de `$('resolver_contexto').first().json.data`. El mensaje de sistema del agente se configura en modo **Expression** para insertar el catálogo real del canal antes de llamar al modelo.
+
+Cuando una reserva temporal requiere anticipo, el backend crea la solicitud de pago en la misma transacción y devuelve su resumen junto con la reserva. La herramienta `solicitar_pago` se mantiene como recuperación idempotente y responde con `ok: true`, `pago.id` numérico y `pago.referenciaCobro` no vacío. El agente solo puede informar que el cobro fue iniciado si el resultado devuelto contiene esos datos.
+
+El simulador sigue siendo exclusivamente de desarrollo: no muestra una URL de checkout ni admite transferencias reales.
+
+`POST /clientes` es la ruta actual para registrar clientes. `POST /leads` continúa disponible como alias de compatibilidad con integraciones anteriores.
 
 ## Flujo de reserva y pago simulado
 
 1. El agente registra o recupera al cliente.
-2. Consulta disponibilidad y crea una `RESERVA_TEMPORAL`.
-3. `POST /pagos/solicitar` crea una única solicitud de cobro y cambia la cita a `PENDIENTE_PAGO`.
+2. Consulta disponibilidad y crea la reserva. Si el servicio exige anticipo, el backend crea en la misma transacción una única solicitud de cobro y deja la cita en `PENDIENTE_PAGO`.
+3. `POST /pagos/solicitar` conserva un uso idempotente: recupera la solicitud vigente o la crea si una integración anterior dejó una reserva sin pago.
 4. El webhook simulado confirma el pago de forma idempotente.
 5. Si el pago coincide y la reserva sigue vigente, la cita pasa a `CONFIRMADA`.
 6. Si la reserva vence, su solicitud pasa a `EXPIRADO`.
@@ -130,6 +134,16 @@ Content-Type: application/json
 ```
 
 La respuesta contiene `referenciaCobro`, `montoEsperado`, `moneda` y `fechaExpiracion`. Reintentar la misma petición mientras el pago está pendiente devuelve la misma solicitud.
+
+### Consultar el estado de una reserva y pago
+
+El agente dispone de la herramienta interna `consultar_estado_reserva`. Para verificarla directamente durante desarrollo:
+
+```http
+GET http://localhost:3000/pagos/estado?canal_id=wa-ana-demo&cita_id=4
+```
+
+La consulta está aislada por el canal y aplica la expiración pendiente antes de responder para evitar informar un estado obsoleto.
 
 ### Simular el webhook aprobado
 

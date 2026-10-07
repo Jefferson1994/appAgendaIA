@@ -8,6 +8,13 @@ function buscarPendientePorCita(citaId, db = prisma) {
   });
 }
 
+function buscarUltimoPorCita(citaId, db = prisma) {
+  return db.pago.findFirst({
+    where: { citaId },
+    orderBy: { fechaCreacion: 'desc' }
+  });
+}
+
 function buscarPorReferenciaCobro(referenciaCobro, db = prisma) {
   return db.pago.findUnique({
     where: { referenciaCobro },
@@ -23,4 +30,10 @@ function actualizar(id, datos, db = prisma) {
   return db.pago.update({ where: { id }, data: datos });
 }
 
-module.exports = { buscarPendientePorCita, buscarPorReferenciaCobro, crear, actualizar };
+module.exports = {
+  buscarPendientePorCita,
+  buscarUltimoPorCita,
+  buscarPorReferenciaCobro,
+  crear,
+  actualizar
+};

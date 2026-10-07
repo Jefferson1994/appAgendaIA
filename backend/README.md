@@ -202,6 +202,6 @@ Los textos nuevos van a `config/mensajes.js` y los valores fijos a `config/const
 - **`shared/` y `jobs/`** vienen del diseño original y siguen como estaban. `shared/prisma.js` podría pasar a `config/` y `shared/reservas.js` a un service.
 - **`/health`** todavía responde con el formato antiguo (`{ ok, mensaje }`).
 - **Seguridad:** limitador de peticiones, autenticación entre n8n y el backend (hoy `canal_id` llega en el cuerpo y no se verifica), y cifrado opcional de respuestas.
-- **n8n:** el workflow debe leer el formato nuevo (`estado`, `data`); las expresiones de `resolver_contexto` ahora son `json.data...` y el prompt ya no debe depender de `ok=true`.
+- **n8n:** las expresiones de `resolver_contexto` usan `json.data...`. Para `POST /pagos/solicitar`, el backend expone tanto el formato estándar (`estado`, `data`) como los campos directos `ok`, `pago.id` y `pago.referenciaCobro`; el agente debe validar esos datos antes de informar que inició un cobro.
 - **Logs** en los services.
 - **Pasarela real** de pagos (PayPhone) en lugar del simulador.

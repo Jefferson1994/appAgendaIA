@@ -1,7 +1,9 @@
 const PacientesService = require('../services/PacientesService');
 const PacienteRequest = require('../dto/request/PacienteRequest');
+const RegistroClienteCanalRequest = require('../dto/request/RegistroClienteCanalRequest');
 const PacienteEB = require('../eb/PacienteEB');
 const MSG = require('../config/mensajes');
+const { HTTP } = require('../config/constantes');
 const { ok } = require('../utils/respuesta');
 
 async function listar(req, res) {
@@ -22,4 +24,16 @@ async function registrar(req, res) {
   );
 }
 
-module.exports = { listar, registrar };
+async function registrarPorCanal(req, res) {
+  const datos = RegistroClienteCanalRequest.validarRegistroPorCanal(req.body);
+  const { nuevo, cliente } = await PacientesService.registrarPorCanal(datos);
+
+  return ok(
+    res,
+    { nuevo, cliente: new PacienteEB(cliente) },
+    nuevo ? MSG.CLIENTE_REGISTRADO : MSG.CLIENTE_EXISTENTE,
+    nuevo ? HTTP.CREADO : HTTP.OK
+  );
+}
+
+module.exports = { listar, registrar, registrarPorCanal };

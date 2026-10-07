@@ -3,6 +3,7 @@ const MSG = require('../config/mensajes');
 const { HTTP } = require('../config/constantes');
 const PacientesRepository = require('../repositories/PacientesRepository');
 const OrganizacionesRepository = require('../repositories/OrganizacionesRepository');
+const CanalesService = require('./CanalesService');
 
 async function exigirOrganizacion(organizacionId) {
   const organizacion = await OrganizacionesRepository.buscarActivaPorId(organizacionId);
@@ -29,4 +30,9 @@ async function registrar({ organizacionId, nombre, telefono, direccion }) {
   return { nuevo: true, cliente };
 }
 
-module.exports = { listar, registrar };
+async function registrarPorCanal({ canalId, nombre, telefono, direccion }) {
+  const canal = await CanalesService.resolverCanalActivo(canalId);
+  return registrar({ organizacionId: canal.organizacionId, nombre, telefono, direccion });
+}
+
+module.exports = { listar, registrar, registrarPorCanal };
