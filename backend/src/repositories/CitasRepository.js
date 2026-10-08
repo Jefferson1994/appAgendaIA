@@ -67,6 +67,26 @@ function actualizar(id, datos, db = prisma) {
   return db.cita.update({ where: { id }, data: datos });
 }
 
+// Citas de una empresa en un rango, para la pantalla de agenda.
+// Una reserva temporal o pendiente cuyo plazo ya venció no se muestra, aunque la limpieza automática
+// todavía no la haya marcado como expirada.
+function listarAgenda({ organizacionId, profesionalId, desde, hasta, estados, ahora }, db = prisma) {
+  return db.cita.findMany({
+    where: {
+      organizacionId,
+      ...(profesionalId ? { profesionalId } : {}),
+      fechaInicio: { gte: desde, lt: hasta },
+      estado: { in: estados },
+      OR: [
+        { estado: { notIn: ESTADOS_RESERVA_EXPIRABLES } },
+        { fechaExpiracionReserva: { gt: ahora } }
+      ]
+    },
+    include: { cliente: true, servicio: true, profesional: true },
+    orderBy: { fechaInicio: 'asc' }
+  });
+}
+
 module.exports = {
   listarBloqueantesEnRango,
   buscarReservaVigente,
@@ -74,5 +94,6 @@ module.exports = {
   buscarParaPago,
   buscarPorId,
   buscarUltimaPorTelefono,
+  listarAgenda,
   actualizar
 };

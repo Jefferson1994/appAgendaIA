@@ -21,4 +21,15 @@ function validarTexto(valor, campo, maximo = LONGITUD_MAX.TEXTO) {
   return texto;
 }
 
-module.exports = { validarIdPositivo, validarTexto };
+// Acepta solo true o false. Si no viene y hay valor por defecto, usa ese.
+function validarBooleano(valor, campo, defecto) {
+  if ((valor === undefined || valor === null) && defecto !== undefined) {
+    return defecto;
+  }
+  if (typeof valor !== 'boolean') {
+    throw new AppError(MSG.DATO_INVALIDO(campo), HTTP.PETICION_INVALIDA);
+  }
+  return valor;
+}
+
+module.exports = { validarIdPositivo, validarTexto, validarBooleano };

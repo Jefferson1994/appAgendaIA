@@ -14,5 +14,6 @@ const crearLimitador = ({ ventanaMs, maximo }) =>
 
 module.exports = {
   limitadorGeneral: crearLimitador(LIMITES.GENERAL),
-  limitadorEscritura: crearLimitador(LIMITES.ESCRITURA)
+  limitadorEscritura: crearLimitador(LIMITES.ESCRITURA),
+  limitadorAutenticacion: crearLimitador(LIMITES.AUTENTICACION)
 };
