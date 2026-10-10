@@ -41,6 +41,28 @@ function validarZonaHorariaOpcional(valor) {
   return zona;
 }
 
+const LIMITE_COORDENADA = { latitud: 90, longitud: 180 };
+const DECIMALES_COORDENADA = 6;
+
+function validarCoordenadaOpcional(valor, campo) {
+  if (vacio(valor)) return null;
+  const numero = Number(valor);
+  if (!Number.isFinite(numero) || Math.abs(numero) > LIMITE_COORDENADA[campo]) {
+    throw new AppError(MSG.DATO_INVALIDO(`organizacion.${campo}`), HTTP.PETICION_INVALIDA);
+  }
+  return Number(numero.toFixed(DECIMALES_COORDENADA));
+}
+
+// Latitud y longitud van juntas: un punto con una sola coordenada no sirve.
+function validarCoordenadas(datos) {
+  const latitud = validarCoordenadaOpcional(datos.latitud, 'latitud');
+  const longitud = validarCoordenadaOpcional(datos.longitud, 'longitud');
+  if ((latitud === null) !== (longitud === null)) {
+    throw new AppError(MSG.DATO_INVALIDO('organizacion.latitud'), HTTP.PETICION_INVALIDA);
+  }
+  return { latitud, longitud };
+}
+
 function validarOrganizacion(datos = {}) {
   return {
     nombre: validarTexto(datos.nombre, 'organizacion.nombre', LONGITUD_MAX.TEXTO),
@@ -52,7 +74,8 @@ function validarOrganizacion(datos = {}) {
     provincia: textoOpcional(datos.provincia, 'organizacion.provincia', LONGITUD_UBICACION),
     ciudad: textoOpcional(datos.ciudad, 'organizacion.ciudad', LONGITUD_UBICACION),
     direccion: textoOpcional(datos.direccion, 'organizacion.direccion', LONGITUD_MAX.DIRECCION),
-    zonaHoraria: validarZonaHorariaOpcional(datos.zonaHoraria)
+    zonaHoraria: validarZonaHorariaOpcional(datos.zonaHoraria),
+    ...validarCoordenadas(datos)
   };
 }
 
