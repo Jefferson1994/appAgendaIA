@@ -11,9 +11,7 @@ router.post(Paths.REGISTRO_EMPRESA, limitadorAutenticacion, asyncHandler(AuthCon
 router.post(Paths.LOGIN, limitadorAutenticacion, asyncHandler(AuthController.login));
 router.post(Paths.REFRESH, limitadorAutenticacion, asyncHandler(AuthController.refrescar));
 router.post(Paths.LOGOUT, asyncHandler(AuthController.logout));
-router.get(Paths.YO, autenticar, asyncHandler(AuthController.yo))
-
-
-// GET Paths.YO se agrega cuando exista el middleware "autenticar".
+router.get(Paths.YO, autenticar, asyncHandler(AuthController.yo));
+router.post(Paths.CAMBIAR_CLAVE, autenticar, asyncHandler(AuthController.cambiarClave));
 
 module.exports = router;

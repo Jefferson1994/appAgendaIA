@@ -105,8 +105,75 @@ module.exports = {
     BCRYPT_RONDAS: 12,
     MAX_INTENTOS_FALLIDOS: 5,
     BLOQUEO_MINUTOS: 15,
-    CLAVE_MIN_LARGO: 8
+    CLAVE_MIN_LARGO: 8,
+    CLAVE_TEMPORAL_LARGO: 12
   },
+  // Envío de correos: CORREO_PROVEEDOR en el .env (ninguno | smtp).
+  CORREO: { PROVEEDORES: { NINGUNO: 'ninguno', SMTP: 'smtp' } },
   AGENDA: { FILTROS: FILTROS_AGENDA, FILTRO_DEFECTO: 'TODAS', MAX_DIAS_RANGO: 31 },
   PAGINACION: { PAGINA_DEFECTO: 1, TAMANO_DEFECTO: 20, TAMANO_MAX: 100 },
+  // Formatos de la configuración de módulos. La ruta tiene un solo segmento porque el
+  // front carga el feature cuya carpeta se llama igual (ej. /historia-clinica).
+  FORMATOS_ACCESO: {
+    CODIGO: /^[A-Z][A-Z0-9_]*$/,
+    RUTA: /^\/[a-z0-9]+(-[a-z0-9]+)*$/,
+    ICONO: /^[a-z0-9]+(-[a-z0-9]+)*$/,
+    CODIGO_BOTON: /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/
+  },
+  // Largos de las columnas en schema.prisma (modulos, pantallas y permisos).
+  LONGITUD_ACCESO: {
+    CODIGO_MODULO: 60,
+    CODIGO_PANTALLA: 80,
+    CODIGO_BOTON: 80,
+    NOMBRE: 100,
+    DESCRIPCION: 250,
+    ICONO: 60,
+    RUTA: 150,
+    CATEGORIA: 50
+  },
+  ORDEN_ACCESO: { MIN: 0, MAX: 999 },
+  // Catálogos genéricos que usa el código (sus items se administran en la pantalla Catálogos).
+  CATALOGOS: {
+    BANCOS: 'BANCOS',
+    BILLETERAS: 'BILLETERAS',
+    TIPOS_CUENTA: 'TIPOS_CUENTA',
+    TIPOS_DOCUMENTO: 'TIPOS_DOCUMENTO'
+  },
+  LONGITUD_CATALOGOS: { CODIGO: 60, NOMBRE: 150, DESCRIPCION: 250 },
+  // Items de TIPOS_DOCUMENTO y qué archivos acepta cada uno.
+  TIPOS_DOCUMENTO: { QR_COBRO: 'QR_COBRO', COMPROBANTE_PAGO: 'COMPROBANTE_PAGO' },
+  // Archivos permitidos: extensión y firma (primeros bytes) para no confiar en el nombre ni en el
+  // tipo que declara el navegador.
+  ARCHIVOS_PERMITIDOS: {
+    'image/png': { extension: 'png', firma: [0x89, 0x50, 0x4e, 0x47] },
+    'image/jpeg': { extension: 'jpg', firma: [0xff, 0xd8, 0xff] },
+    'application/pdf': { extension: 'pdf', firma: [0x25, 0x50, 0x44, 0x46] }
+  },
+  MIME_POR_TIPO_DOCUMENTO: {
+    QR_COBRO: ['image/png', 'image/jpeg'],
+    COMPROBANTE_PAGO: ['image/png', 'image/jpeg', 'application/pdf']
+  },
+  LONGITUD_DOCUMENTOS: { NOMBRE_ORIGINAL: 255 },
+  // Enum TipoMedioCobro de schema.prisma.
+  TIPOS_MEDIO_COBRO: { TRANSFERENCIA: 'TRANSFERENCIA', BILLETERA: 'BILLETERA' },
+  LONGITUD_COBROS: { NUMERO: 40, TITULAR: 150, IDENTIFICACION: 20, ALIAS: 100 },
+  // Enum TipoReserva de schema.prisma: qué reserva el cliente en un tipo de negocio.
+  TIPOS_RESERVA: { PERSONAS: 'PERSONAS', ESPACIOS: 'ESPACIOS', AMBOS: 'AMBOS' },
+  // Largos de categorias_empresa, cargos y usuarios.cargo_observacion en schema.prisma.
+  LONGITUD_CATEGORIAS: { CODIGO: 60, NOMBRE: 100, DESCRIPCION: 250, ICONO: 60, OBSERVACION_CARGO: 250 },
+  // Enums de schema.prisma (EstadoSuscripcion, Periodicidad).
+  ESTADOS_SUSCRIPCION: { PENDIENTE_PAGO: 'PENDIENTE_PAGO', VIGENTE: 'VIGENTE', FINALIZADA: 'FINALIZADA' },
+  PERIODICIDADES: { MENSUAL: 'MENSUAL', ANUAL: 'ANUAL' },
+  // Cómo se cobra una suscripción o un módulo suelto. Hoy no hay pasarela: se activa al contratar.
+  PROVEEDOR_COBRO: { SIN_PASARELA: 'SIN_PASARELA' },
+  // Venta de planes y módulos sueltos. Largos según schema.prisma (planes).
+  VENTA: {
+    PRECIO_MIN: 0,
+    PRECIO_MAX: 99999999.99,
+    FORMATO_MONEDA: /^[A-Z]{3}$/,
+    LONGITUD_CODIGO_PLAN: 40,
+    LONGITUD_NOMBRE_PLAN: 100,
+    LONGITUD_DESCRIPCION_PLAN: 500,
+    MODULOS_POR_PLAN_MAX: 100
+  },
 };

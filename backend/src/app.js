@@ -27,6 +27,26 @@ const clientesConsultaRoutes = require('./routes/clientes.consulta.routes');
 const ClientesConsultaPaths = require('./routes/paths/ClientesConsultaPaths');
 const serviciosCatalogoRoutes = require('./routes/servicios.catalogo.routes');
 const CatalogoServiciosPaths = require('./routes/paths/CatalogoServiciosPaths');
+const configuracionModulosRoutes = require('./routes/configuracion.modulos.routes');
+const ConfiguracionModulosPaths = require('./routes/paths/ConfiguracionModulosPaths');
+const planesRoutes = require('./routes/planes.routes');
+const PlanesPaths = require('./routes/paths/PlanesPaths');
+const suscripcionRoutes = require('./routes/suscripcion.routes');
+const SuscripcionPaths = require('./routes/paths/SuscripcionPaths');
+const rolesRoutes = require('./routes/roles.routes');
+const RolesPaths = require('./routes/paths/RolesPaths');
+const usuariosRoutes = require('./routes/usuarios.routes');
+const UsuariosPaths = require('./routes/paths/UsuariosPaths');
+const categoriasRoutes = require('./routes/categorias.routes');
+const CategoriasPaths = require('./routes/paths/CategoriasPaths');
+const catalogosRoutes = require('./routes/catalogos.routes');
+const CatalogosPaths = require('./routes/paths/CatalogosPaths');
+const documentosRoutes = require('./routes/documentos.routes');
+const DocumentosPaths = require('./routes/paths/DocumentosPaths');
+const cobrosRoutes = require('./routes/cobros.routes');
+const CobrosPaths = require('./routes/paths/CobrosPaths');
+const perfilRoutes = require('./routes/perfil.routes');
+const PerfilPaths = require('./routes/paths/PerfilPaths');
 
 
 const app = express();
@@ -37,7 +57,18 @@ app.use(limitadorGeneral);
 const RUTAS_DE_CONSULTA = [
   AgendaPaths.BASE,
   `${ClientesConsultaPaths.BASE}${ClientesConsultaPaths.CONSULTAR}`,
-  `${CatalogoServiciosPaths.BASE}${CatalogoServiciosPaths.CONSULTAR}`
+  `${CatalogoServiciosPaths.BASE}${CatalogoServiciosPaths.CONSULTAR}`,
+  `${ConfiguracionModulosPaths.BASE}${ConfiguracionModulosPaths.CONSULTAR}`,
+  `${PlanesPaths.BASE}${PlanesPaths.CONSULTAR}`,
+  `${SuscripcionPaths.BASE}${SuscripcionPaths.CONSULTAR}`,
+  `${RolesPaths.BASE}${RolesPaths.CONSULTAR}`,
+  `${UsuariosPaths.BASE}${UsuariosPaths.CONSULTAR}`,
+  `${CategoriasPaths.BASE}${CategoriasPaths.CONSULTAR}`,
+  `${CategoriasPaths.BASE}${CategoriasPaths.PUBLICAS}`,
+  `${CatalogosPaths.BASE}${CatalogosPaths.CONSULTAR}`,
+  `${CobrosPaths.BASE}${CobrosPaths.CONSULTAR}`,
+  `${CobrosPaths.BASE}${CobrosPaths.MIOS_CONSULTAR}`,
+  `${PerfilPaths.BASE}${PerfilPaths.CONSULTAR}`
 ];
 app.post('*', (req, res, next) =>
   RUTAS_DE_CONSULTA.some((ruta) => req.path.startsWith(ruta)) ? next() : limitadorEscritura(req, res, next)
@@ -62,6 +93,16 @@ app.use(PagosPaths.BASE, pagosRoutes);
 app.use(WebhooksPagosPaths.BASE, pagosWebhooksRoutes);
 app.use(AuthPaths.BASE, authRoutes);
 app.use(AgendaPaths.BASE, agendaRoutes);
+app.use(ConfiguracionModulosPaths.BASE, configuracionModulosRoutes);
+app.use(PlanesPaths.BASE, planesRoutes);
+app.use(SuscripcionPaths.BASE, suscripcionRoutes);
+app.use(RolesPaths.BASE, rolesRoutes);
+app.use(UsuariosPaths.BASE, usuariosRoutes);
+app.use(CategoriasPaths.BASE, categoriasRoutes);
+app.use(CatalogosPaths.BASE, catalogosRoutes);
+app.use(DocumentosPaths.BASE, documentosRoutes);
+app.use(CobrosPaths.BASE, cobrosRoutes);
+app.use(PerfilPaths.BASE, perfilRoutes);
 
 // Debe ir al final de las rutas.
 app.use(errorHandler);

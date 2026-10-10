@@ -24,4 +24,12 @@ function revocarFamilia(familiaId, db = prisma) {
   });
 }
 
-module.exports = { crear, buscarPorHash, revocar, revocarFamilia };
+// Cierra todas las sesiones de un usuario (al restablecer su clave o desactivarlo).
+function revocarDeUsuario(usuarioId, db = prisma) {
+  return db.refreshToken.updateMany({
+    where: { usuarioId, revocadoEn: null },
+    data: { revocadoEn: new Date() }
+  });
+}
+
+module.exports = { crear, buscarPorHash, revocar, revocarFamilia, revocarDeUsuario };

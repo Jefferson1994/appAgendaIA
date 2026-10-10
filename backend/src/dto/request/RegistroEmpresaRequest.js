@@ -2,8 +2,9 @@ const { IANAZone } = require('luxon');
 const AppError = require('../../errors/AppError');
 const MSG = require('../../config/mensajes');
 const { HTTP, LONGITUD_MAX } = require('../../config/constantes');
-const { validarTexto } = require('../../utils/validaciones');
+const { validarTexto, validarIdPositivo } = require('../../utils/validaciones');
 const { validarDatosPersona } = require('./RegistroUsuarioRequest');
+const { validarPersonalEmpresa } = require('./CategoriasRequest');
 
 const FORMATO_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const FORMATO_RUC = /^\d{13}$/;
@@ -65,6 +66,8 @@ function validarCoordenadas(datos) {
 
 function validarOrganizacion(datos = {}) {
   return {
+    // Tipo de negocio (subcategoría): define qué se reserva y los cargos del personal.
+    categoriaId: validarIdPositivo(datos.categoriaId, 'organizacion.categoriaId'),
     nombre: validarTexto(datos.nombre, 'organizacion.nombre', LONGITUD_MAX.TEXTO),
     nombreComercial: textoOpcional(datos.nombreComercial, 'organizacion.nombreComercial', LONGITUD_MAX.TEXTO),
     ruc: validarRucOpcional(datos.ruc),
@@ -83,7 +86,7 @@ function validarOrganizacion(datos = {}) {
 function validarRegistroEmpresa(body = {}) {
   return {
     organizacion: validarOrganizacion(body.organizacion),
-    administrador: validarDatosPersona(body.administrador)
+    administrador: { ...validarDatosPersona(body.administrador), ...validarPersonalEmpresa(body.administrador) }
   };
 }
 

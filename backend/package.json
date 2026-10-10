@@ -15,7 +15,9 @@
     "express": "^4.19.2",
     "express-rate-limit": "^8.7.0",
     "jsonwebtoken": "^9.0.3",
-    "luxon": "^3.7.2"
+    "luxon": "^3.7.2",
+    "multer": "^2.4.0",
+    "nodemailer": "^10.0.16"
   },
   "devDependencies": {
     "prisma": "^6.19.3"

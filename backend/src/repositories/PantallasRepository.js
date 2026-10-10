@@ -1,11 +1,28 @@
 const prisma = require('../shared/prisma');
 
+// Botones (permisos) de la pantalla con su acción y cuántos roles usa cada uno.
+const CON_BOTONES = {
+  permisos: {
+    orderBy: { codigo: 'asc' },
+    include: { accion: true, _count: { select: { roles: true } } }
+  }
+};
+
 function buscarPorCodigo(codigo, db = prisma) {
   return db.pantalla.findUnique({ where: { codigo } });
 }
 
 function buscarPorId(id, db = prisma) {
   return db.pantalla.findUnique({ where: { id } });
+}
+
+// La ruta no es única en la base, pero sí debe serlo: el front la usa para navegar.
+function buscarPorRuta(ruta, db = prisma) {
+  return db.pantalla.findFirst({ where: { ruta } });
+}
+
+function buscarConBotones(id, db = prisma) {
+  return db.pantalla.findUnique({ where: { id }, include: CON_BOTONES });
 }
 
 function listarPorModulo(moduloId, db = prisma) {
@@ -24,4 +41,12 @@ function actualizar(id, datos, db = prisma) {
   return db.pantalla.update({ where: { id }, data: datos });
 }
 
-module.exports = { buscarPorCodigo, buscarPorId, listarPorModulo, crear, actualizar };
+module.exports = {
+  buscarPorCodigo,
+  buscarPorId,
+  buscarPorRuta,
+  buscarConBotones,
+  listarPorModulo,
+  crear,
+  actualizar
+};

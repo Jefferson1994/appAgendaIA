@@ -2,6 +2,7 @@ const AuthService = require('../services/AuthService');
 const LoginRequest = require('../dto/request/LoginRequest');
 const RefreshRequest = require('../dto/request/RefreshRequest');
 const RegistroEmpresaRequest = require('../dto/request/RegistroEmpresaRequest');
+const CambiarClaveRequest = require('../dto/request/CambiarClaveRequest');
 const MSG = require('../config/mensajes');
 const { HTTP } = require('../config/constantes');
 const { ok } = require('../utils/respuesta');
@@ -46,4 +47,12 @@ async function yo(req, res) {
   return ok(res, usuario, MSG.USUARIO_ACTUAL_OK);
 }
 
-module.exports = { login, refrescar, logout, registrarEmpresa, yo };
+// Requiere autenticar. Responde el usuario actualizado (EsClaveTemporal = false).
+async function cambiarClave(req, res) {
+  const datos = CambiarClaveRequest.validarCambiarClave(req.body);
+  const usuario = await AuthService.cambiarClave(req.usuario, datos);
+
+  return ok(res, usuario, MSG.CLAVE_CAMBIADA);
+}
+
+module.exports = { login, refrescar, logout, registrarEmpresa, yo, cambiarClave };

@@ -108,12 +108,19 @@ model Organizacion {
 
   // Politica de servicios de la empresa
   // false = todos cobran el precio del servicio; true = cada profesional puede fijar el suyo
-  preciosPorProfesional Boolean @default(false) @map("precios_por_profesional")
+  preciosPorProfesional       Boolean @default(false) @map("precios_por_profesional")
   // true = un profesional puede crear servicios propios (solo los ofrece el)
   profesionalesCreanServicios Boolean @default(true) @map("profesionales_crean_servicios")
+  // false = todo se paga a las cuentas de la empresa; true = cada profesional cobra en las suyas
+  // (si no registro ninguna, se usan las de la empresa)
+  cobroPorProfesional         Boolean @default(false) @map("cobro_por_profesional")
 
   // persona que representa legalmente a la empresa
   representanteId Int? @map("representante_id")
+
+  // tipo de negocio (subcategoria: Salud > Odontologia). Define que se reserva y los cargos del personal.
+  // null en empresas registradas antes de existir las categorias.
+  categoriaId Int? @map("categoria_id")
 
   zonaHoraria String @default("America/Guayaquil") @map("zona_horaria") @db.VarChar(80)
 
@@ -132,9 +139,14 @@ model Organizacion {
   usuarios               Usuario[]
   rols                   Rol[]
   modulos                OrganizacionModulo[]
+  suscripciones          Suscripcion[]
+  documentos             Documento[]
+  mediosCobro            MedioCobro[]
 
-  representante Persona? @relation(fields: [representanteId], references: [id])
+  representante Persona?          @relation(fields: [representanteId], references: [id])
+  categoria     CategoriaEmpresa? @relation(fields: [categoriaId], references: [id])
 
+  @@index([categoriaId])
   @@map("organizaciones")
 }
 
@@ -174,6 +186,7 @@ model Profesional {
   citas           Cita[]
   canalesAtencion CanalAtencion[]
   usuarios        Usuario[]
+  mediosCobro     MedioCobro[]
 
   @@unique([organizacionId, codigo])
   @@index([organizacionId])
@@ -411,6 +424,8 @@ model ComprobantePago {
 
   archivoUrl  String  @map("archivo_url") @db.VarChar(500)
   hashArchivo String? @unique @map("hash_archivo") @db.VarChar(150)
+  // archivo subido (PDF o imagen) guardado en el almacenamiento de documentos
+  documentoId Int?    @map("documento_id")
 
   montoDetectado      Decimal?  @map("monto_detectado") @db.Decimal(10, 2)
   fechaDetectada      DateTime? @map("fecha_detectada") @db.Timestamptz(6)
@@ -422,7 +437,8 @@ model ComprobantePago {
 
   fechaCreacion DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
 
-  pago Pago @relation(fields: [pagoId], references: [id])
+  pago      Pago       @relation(fields: [pagoId], references: [id])
+  documento Documento? @relation(fields: [documentoId], references: [id])
 
   @@index([pagoId])
   @@map("comprobantes_pago")
@@ -594,6 +610,10 @@ model Usuario {
   profesionalId  Int? @map("profesional_id")
   creadoPorId    Int? @map("creado_por_id")
 
+  // que hace la persona en la empresa (Odontologo, Recepcionista, Mesero) y una nota libre
+  cargoId          Int?    @map("cargo_id")
+  cargoObservacion String? @map("cargo_observacion") @db.VarChar(250)
+
   activo          Boolean @default(true)
   esClaveTemporal Boolean @default(false) @map("es_clave_temporal")
 
@@ -608,7 +628,9 @@ model Usuario {
   organizacion  Organizacion?  @relation(fields: [organizacionId], references: [id])
   rol           Rol?           @relation(fields: [rolId], references: [id])
   profesional   Profesional?   @relation(fields: [profesionalId], references: [id])
+  cargo         Cargo?         @relation(fields: [cargoId], references: [id])
   refreshTokens RefreshToken[]
+  documentos    Documento[]
 
   @@index([organizacionId])
   @@map("usuarios")
@@ -624,10 +646,36 @@ model Permiso {
   // pantalla a la que pertenece este boton o accion
   pantallaId Int? @map("pantalla_id")
 
+  // accion del catalogo que representa este boton (Ver, Crear, Editar...).
+  // null en los permisos que no son un boton de pantalla (ej. citas.gestionar).
+  accionId Int? @map("accion_id")
+
   pantalla Pantalla?    @relation(fields: [pantallaId], references: [id])
+  accion   Accion?      @relation(fields: [accionId], references: [id])
   roles    RolPermiso[]
 
+  // una pantalla no puede tener dos veces la misma accion
+  @@unique([pantallaId, accionId])
   @@map("permisos")
+}
+
+// Catalogo de botones que se pueden poner en una pantalla (Ver, Crear, Editar, Eliminar...).
+// Al asignar una accion a una pantalla se crea su permiso: <recurso>.<accion>, ej. historia_clinica.ver
+model Accion {
+  id Int @id @default(autoincrement())
+
+  codigo String  @unique @db.VarChar(40)
+  nombre String  @db.VarChar(60)
+  icono  String? @db.VarChar(60)
+  orden  Int     @default(0)
+  activo Boolean @default(true)
+
+  // false = el boton funciona sin un registro seleccionado (Crear, Exportar)
+  requiereSeleccion Boolean @default(true) @map("requiere_seleccion")
+
+  permisos Permiso[]
+
+  @@map("acciones")
 }
 
 model Rol {
@@ -709,10 +757,289 @@ model Modulo {
   esBase Boolean @default(false) @map("es_base")
   activo Boolean @default(true)
 
+  // Precio de venta del modulo suelto (fuera de un plan). null = no se vende suelto.
+  precio       Decimal?     @db.Decimal(10, 2)
+  moneda       String       @default("USD") @db.VarChar(3)
+  periodicidad Periodicidad @default(MENSUAL)
+
   pantallas      Pantalla[]
   organizaciones OrganizacionModulo[]
+  planes         PlanModulo[]
 
   @@map("modulos")
+}
+
+// Cada cuanto se cobra un plan o un modulo suelto.
+enum Periodicidad {
+  MENSUAL
+  ANUAL
+}
+
+// =====================================================
+// CATEGORIAS DE NEGOCIO Y CARGOS
+// =====================================================
+
+// Que reserva el cliente en un tipo de negocio: personas (doctor, barbero),
+// espacios (cancha, mesa, sala) o ambos (gimnasio: entrenador y sala).
+enum TipoReserva {
+  PERSONAS
+  ESPACIOS
+  AMBOS
+}
+
+// Dos niveles: categoria general (padreId null: Salud, Deportes) y subcategoria
+// (Salud > Odontologia). La empresa guarda la subcategoria. Los administra el super admin.
+model CategoriaEmpresa {
+  id      Int  @id @default(autoincrement())
+  padreId Int? @map("padre_id")
+
+  codigo      String      @unique @db.VarChar(60)
+  nombre      String      @db.VarChar(100)
+  descripcion String?     @db.VarChar(250)
+  icono       String?     @db.VarChar(60)
+  reserva     TipoReserva @default(PERSONAS)
+  orden       Int         @default(0)
+
+  activo Boolean @default(true)
+
+  fechaCreacion      DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion") @db.Timestamptz(6)
+
+  padre          CategoriaEmpresa?  @relation("CategoriaSubcategorias", fields: [padreId], references: [id])
+  subcategorias  CategoriaEmpresa[] @relation("CategoriaSubcategorias")
+  cargos         Cargo[]
+  organizaciones Organizacion[]
+
+  @@index([padreId])
+  @@map("categorias_empresa")
+}
+
+// Lo que hace una persona en la empresa. Una subcategoria ve sus cargos y los de su categoria general.
+model Cargo {
+  id          Int @id @default(autoincrement())
+  categoriaId Int @map("categoria_id")
+
+  codigo      String  @unique @db.VarChar(60)
+  nombre      String  @db.VarChar(100)
+  descripcion String? @db.VarChar(250)
+  orden       Int     @default(0)
+
+  activo Boolean @default(true)
+
+  fechaCreacion      DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion") @db.Timestamptz(6)
+
+  categoria CategoriaEmpresa @relation(fields: [categoriaId], references: [id])
+  usuarios  Usuario[]
+
+  @@index([categoriaId])
+  @@map("cargos")
+}
+
+// =====================================================
+// CATALOGOS GENERICOS
+// =====================================================
+
+// Listas de valores de la plataforma (bancos, billeteras, tipos de cuenta, tipos de documento...).
+// El codigo del catalogo lo usa el backend; sus items los administra el super admin.
+model Catalogo {
+  id Int @id @default(autoincrement())
+
+  codigo      String  @unique @db.VarChar(60)
+  nombre      String  @db.VarChar(100)
+  descripcion String? @db.VarChar(250)
+
+  activo Boolean @default(true)
+
+  fechaCreacion      DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion") @db.Timestamptz(6)
+
+  items CatalogoItem[]
+
+  @@map("catalogos")
+}
+
+model CatalogoItem {
+  id         Int @id @default(autoincrement())
+  catalogoId Int @map("catalogo_id")
+
+  codigo      String  @db.VarChar(60)
+  nombre      String  @db.VarChar(150)
+  descripcion String? @db.VarChar(250)
+  orden       Int     @default(0)
+
+  activo Boolean @default(true)
+
+  fechaCreacion      DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion") @db.Timestamptz(6)
+
+  catalogo Catalogo @relation(fields: [catalogoId], references: [id])
+
+  documentos       Documento[]  @relation("DocumentoTipo")
+  mediosPorEntidad MedioCobro[] @relation("MedioCobroEntidad")
+  mediosPorTipoCta MedioCobro[] @relation("MedioCobroTipoCuenta")
+
+  @@unique([catalogoId, codigo])
+  @@index([catalogoId])
+  @@map("catalogo_items")
+}
+
+// =====================================================
+// DOCUMENTOS (archivos en el almacenamiento: SeaweedFS)
+// =====================================================
+
+// Metadatos de un archivo; el contenido vive en el almacenamiento, en `ruta`.
+// organizacionId null = archivo de la plataforma.
+model Documento {
+  id             Int  @id @default(autoincrement())
+  organizacionId Int? @map("organizacion_id")
+  // item del catalogo TIPOS_DOCUMENTO (QR de cobro, comprobante de pago...)
+  tipoId         Int  @map("tipo_id")
+
+  nombreOriginal String @map("nombre_original") @db.VarChar(255)
+  mimeType       String @map("mime_type") @db.VarChar(100)
+  tamanoBytes    Int    @map("tamano_bytes")
+  ruta           String @unique @db.VarChar(500)
+  hash           String @db.VarChar(64)
+
+  subidoPorId Int?    @map("subido_por_id")
+  activo      Boolean @default(true)
+
+  fechaCreacion DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+
+  organizacion Organizacion? @relation(fields: [organizacionId], references: [id])
+  tipo         CatalogoItem  @relation("DocumentoTipo", fields: [tipoId], references: [id])
+  subidoPor    Usuario?      @relation(fields: [subidoPorId], references: [id])
+
+  mediosCobro  MedioCobro[]
+  comprobantes ComprobantePago[]
+
+  @@index([organizacionId])
+  @@index([tipoId])
+  @@map("documentos")
+}
+
+// =====================================================
+// MEDIOS DE COBRO
+// =====================================================
+
+enum TipoMedioCobro {
+  TRANSFERENCIA
+  BILLETERA
+}
+
+// Donde se le paga a la empresa (profesionalId null) o a un profesional.
+// TRANSFERENCIA: banco + tipo de cuenta + numero. BILLETERA (Deuna...): numero/telefono + QR.
+model MedioCobro {
+  id             Int  @id @default(autoincrement())
+  organizacionId Int  @map("organizacion_id")
+  profesionalId  Int? @map("profesional_id")
+
+  tipo         TipoMedioCobro
+  // item de BANCOS (transferencia) o de BILLETERAS (billetera)
+  entidadId    Int            @map("entidad_id")
+  // item de TIPOS_CUENTA; solo en transferencias
+  tipoCuentaId Int?           @map("tipo_cuenta_id")
+
+  numero                String  @db.VarChar(40)
+  titular               String  @db.VarChar(150)
+  identificacionTitular String? @map("identificacion_titular") @db.VarChar(20)
+  alias                 String? @db.VarChar(100)
+
+  // imagen del QR (documento tipo QR de cobro)
+  qrDocumentoId Int? @map("qr_documento_id")
+
+  orden  Int     @default(0)
+  activo Boolean @default(true)
+
+  fechaCreacion      DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion") @db.Timestamptz(6)
+
+  organizacion Organizacion  @relation(fields: [organizacionId], references: [id])
+  profesional  Profesional?  @relation(fields: [profesionalId], references: [id])
+  entidad      CatalogoItem  @relation("MedioCobroEntidad", fields: [entidadId], references: [id])
+  tipoCuenta   CatalogoItem? @relation("MedioCobroTipoCuenta", fields: [tipoCuentaId], references: [id])
+  qrDocumento  Documento?    @relation(fields: [qrDocumentoId], references: [id])
+
+  @@index([organizacionId, profesionalId])
+  @@map("medios_cobro")
+}
+
+// Plan de suscripcion (Basico, Medio, Alto...). Cada plan tiene su propia lista de modulos.
+model Plan {
+  id Int @id @default(autoincrement())
+
+  codigo      String  @unique @db.VarChar(40)
+  nombre      String  @db.VarChar(100)
+  descripcion String? @db.VarChar(500)
+
+  precio       Decimal      @db.Decimal(10, 2)
+  moneda       String       @default("USD") @db.VarChar(3)
+  periodicidad Periodicidad @default(MENSUAL)
+
+  orden  Int     @default(0)
+  // false = ya no se ofrece; las suscripciones existentes siguen vigentes
+  activo Boolean @default(true)
+
+  fechaCreacion DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+
+  modulos       PlanModulo[]
+  suscripciones Suscripcion[]
+
+  @@map("planes")
+}
+
+model PlanModulo {
+  planId   Int @map("plan_id")
+  moduloId Int @map("modulo_id")
+
+  plan   Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  modulo Modulo @relation(fields: [moduloId], references: [id])
+
+  @@id([planId, moduloId])
+  @@index([moduloId])
+  @@map("planes_modulos")
+}
+
+// Ciclo de vida de una suscripcion.
+// PENDIENTE_PAGO: creada, esperando la confirmacion de la pasarela (no da acceso todavia).
+// VIGENTE: da acceso a los modulos del plan. FINALIZADA: reemplazada por otro plan o cancelada.
+enum EstadoSuscripcion {
+  PENDIENTE_PAGO
+  VIGENTE
+  FINALIZADA
+}
+
+// Historial de planes de cada empresa. Solo una esta VIGENTE: al cambiar de plan,
+// la anterior pasa a FINALIZADA (con fechaFin) y se crea una nueva.
+// Precio, moneda y periodicidad se copian del plan al suscribirse (quedan como se cobraron).
+model Suscripcion {
+  id Int @id @default(autoincrement())
+
+  organizacionId Int @map("organizacion_id")
+  planId         Int @map("plan_id")
+
+  precio       Decimal      @db.Decimal(10, 2)
+  moneda       String       @db.VarChar(3)
+  periodicidad Periodicidad
+
+  estado      EstadoSuscripcion @default(PENDIENTE_PAGO)
+  fechaInicio DateTime          @default(now()) @map("fecha_inicio") @db.Timestamptz(6)
+  // null = sin vencimiento
+  fechaFin    DateTime?         @map("fecha_fin") @db.Timestamptz(6)
+
+  // Datos del cobro. Sin pasarela: SIN_PASARELA y sin referencia.
+  proveedorPago  String?   @map("proveedor_pago") @db.VarChar(30)
+  referenciaPago String?   @map("referencia_pago") @db.VarChar(120)
+  fechaPago      DateTime? @map("fecha_pago") @db.Timestamptz(6)
+
+  fechaCreacion DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+
+  organizacion Organizacion @relation(fields: [organizacionId], references: [id])
+  plan         Plan         @relation(fields: [planId], references: [id])
+
+  @@index([organizacionId, estado])
+  @@map("suscripciones")
 }
 
 model Pantalla {
@@ -727,6 +1054,11 @@ model Pantalla {
   icono  String? @db.VarChar(60)
   orden  Int     @default(0)
   activo Boolean @default(true)
+
+  // true = solo la ve el super admin (administración de la plataforma), aunque el módulo sea base
+  soloPlataforma Boolean @default(false) @map("solo_plataforma")
+  // true = la ve todo usuario sin que su rol la tenga asignada (p. ej. Mi perfil)
+  paraTodos      Boolean @default(false) @map("para_todos")
 
   modulo Modulo @relation(fields: [moduloId], references: [id])
 
@@ -748,6 +1080,12 @@ model OrganizacionModulo {
   activo      Boolean   @default(true)
   fechaInicio DateTime  @default(now()) @map("fecha_inicio") @db.Timestamptz(6)
   fechaFin    DateTime? @map("fecha_fin") @db.Timestamptz(6)
+
+  // Precio acordado al comprar el modulo suelto (copia del precio del modulo en ese momento).
+  // null en licencias asignadas sin cobro (ej. las de desarrollo del seed).
+  precio       Decimal?      @db.Decimal(10, 2)
+  moneda       String?       @db.VarChar(3)
+  periodicidad Periodicidad?
 
   fechaCreacion      DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
   fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion") @db.Timestamptz(6)

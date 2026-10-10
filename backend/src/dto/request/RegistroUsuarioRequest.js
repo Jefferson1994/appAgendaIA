@@ -63,4 +63,12 @@ function validarDatosPersona(body = {}) {
   };
 }
 
-module.exports = { validarDatosPersona };
+// Identificación (opcional, con su tipo) y teléfono (opcional) de una persona.
+function validarIdentificacionYContacto(body = {}) {
+  return {
+    ...validarIdentificacion(body.tipoIdentificacion, body.identificacion),
+    telefono: vacio(body.telefono) ? null : validarTexto(body.telefono, 'telefono', LONGITUD_MAX.TELEFONO)
+  };
+}
+
+module.exports = { validarDatosPersona, validarEmail, validarIdentificacionYContacto };

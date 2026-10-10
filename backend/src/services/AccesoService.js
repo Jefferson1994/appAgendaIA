@@ -4,12 +4,14 @@ const { HTTP, TIPO_ACCESO, ALCANCE_ROL } = require('../config/constantes');
 const ModulosRepository = require('../repositories/ModulosRepository');
 const PermisosRepository = require('../repositories/PermisosRepository');
 const OrganizacionModulosRepository = require('../repositories/OrganizacionModulosRepository');
+const SuscripcionesRepository = require('../repositories/SuscripcionesRepository');
 
 const esAdministrador = (usuario) =>
   [TIPO_ACCESO.SUPER_ADMIN, TIPO_ACCESO.ADMIN_EMPRESA].includes(usuario.tipoAcceso);
 
 // Ids de los módulos que el usuario puede usar:
-// el super admin, todos los activos; el resto, los base más los licenciados y vigentes de su empresa.
+// el super admin, todos los activos; el resto, los de su empresa:
+// base + los del plan vigente + los comprados sueltos (licencias vigentes).
 async function modulosPermitidos(usuario) {
   const modulos = (await ModulosRepository.listar()).filter((modulo) => modulo.activo);
 
@@ -20,16 +22,33 @@ async function modulosPermitidos(usuario) {
     return new Set();
   }
 
-  const licencias = await OrganizacionModulosRepository.listarVigentes(usuario.organizacionId);
-  const licenciados = new Set(licencias.map((licencia) => licencia.moduloId));
+  const ahora = new Date();
+  const [licencias, suscripcion] = await Promise.all([
+    OrganizacionModulosRepository.listarVigentes(usuario.organizacionId, ahora),
+    SuscripcionesRepository.buscarVigente(usuario.organizacionId, ahora)
+  ]);
+  const contratados = new Set([
+    ...licencias.map((licencia) => licencia.moduloId),
+    ...(suscripcion ? suscripcion.plan.modulos.map((planModulo) => planModulo.moduloId) : [])
+  ]);
 
   return new Set(
-    modulos.filter((modulo) => modulo.esBase || licenciados.has(modulo.id)).map((modulo) => modulo.id)
+    modulos.filter((modulo) => modulo.esBase || contratados.has(modulo.id)).map((modulo) => modulo.id)
   );
 }
 
-// Un permiso vale si su pantalla está activa y su módulo está permitido.
+// Las pantallas de plataforma (soloPlataforma) son exclusivas del super admin, aunque su módulo sea base.
+const pantallaVisiblePara = (usuario, pantalla) =>
+  !pantalla.soloPlataforma || usuario.tipoAcceso === TIPO_ACCESO.SUPER_ADMIN;
+
+// Un permiso vale si su pantalla está activa, es visible para el usuario y su módulo está permitido.
 // Los permisos sin pantalla no dependen de ningún módulo.
+const permisoVigente = (usuario, permitidos) => (permiso) =>
+  !permiso.pantalla ||
+  (permiso.pantalla.activo &&
+    pantallaVisiblePara(usuario, permiso.pantalla) &&
+    permitidos.has(permiso.pantalla.moduloId));
+
 function permisosDelRol(usuario, permitidos) {
   const { rol } = usuario;
   if (!rol || !rol.activo) {
@@ -38,21 +57,35 @@ function permisosDelRol(usuario, permitidos) {
 
   return rol.permisos
     .map((rolPermiso) => rolPermiso.permiso)
-    .filter(
-      (permiso) =>
-        !permiso.pantalla || (permiso.pantalla.activo && permitidos.has(permiso.pantalla.moduloId))
-    )
+    .filter(permisoVigente(usuario, permitidos))
     .map((permiso) => permiso.codigo);
 }
 
 // Códigos de permiso efectivos. El super admin tiene todo el catálogo.
+// El administrador de empresa tiene todos los de los módulos de su empresa, incluidos
+// los botones que se agreguen después a sus pantallas; el personal, los de su rol.
 async function permisosDe(usuario, permitidos) {
   if (usuario.tipoAcceso === TIPO_ACCESO.SUPER_ADMIN) {
     const catalogo = await PermisosRepository.listar();
     return catalogo.map((permiso) => permiso.codigo);
   }
 
-  return permisosDelRol(usuario, permitidos || (await modulosPermitidos(usuario)));
+  const modulos = permitidos || (await modulosPermitidos(usuario));
+
+  if (usuario.tipoAcceso === TIPO_ACCESO.ADMIN_EMPRESA) {
+    const catalogo = await PermisosRepository.listarConPantalla();
+    return catalogo.filter(permisoVigente(usuario, modulos)).map((permiso) => permiso.codigo);
+  }
+
+  return permisosDelRol(usuario, modulos);
+}
+
+// Botones de una pantalla que el usuario puede usar, en el orden del catálogo de acciones.
+function botonesConcedidos(pantalla, concedidos) {
+  return pantalla.permisos
+    .filter((permiso) => concedidos.has(permiso.codigo) && permiso.accion && permiso.accion.activo)
+    .map((permiso) => ({ permiso: permiso.codigo, accion: permiso.accion }))
+    .sort((a, b) => a.accion.orden - b.accion.orden);
 }
 
 // Administradores ven todas las pantallas de sus módulos; el personal, solo las de su rol.
@@ -74,12 +107,15 @@ async function construirMenu(usuario, permisos, permitidos) {
     .map((modulo) => ({
       ...modulo,
       pantallas: modulo.pantallas
-        .filter((pantalla) => verTodas || pantallasDelRol.has(pantalla.id))
+        .filter((pantalla) => pantallaVisiblePara(usuario, pantalla))
+        // `paraTodos` (p. ej. Mi perfil): la ve cualquier usuario aunque su rol no la tenga.
+        .filter((pantalla) => verTodas || pantalla.paraTodos || pantallasDelRol.has(pantalla.id))
         .map((pantalla) => ({
           ...pantalla,
           acciones: pantalla.permisos
             .map((permiso) => permiso.codigo)
-            .filter((codigo) => concedidos.has(codigo))
+            .filter((codigo) => concedidos.has(codigo)),
+          botones: botonesConcedidos(pantalla, concedidos)
         }))
     }))
     .filter((modulo) => modulo.pantallas.length > 0);
@@ -112,4 +148,4 @@ function resolverAlcance(usuario, profesionalSolicitado = null) {
   return { organizacionId: usuario.organizacionId, profesionalId: profesionalSolicitado };
 }
 
-module.exports = { permisosDe, obtenerAcceso, resolverAlcance };
+module.exports = { modulosPermitidos, permisosDe, obtenerAcceso, resolverAlcance };

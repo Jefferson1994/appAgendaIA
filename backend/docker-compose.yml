@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: agendaia_dev_2026
 
     ports:
-      - "5433:5432"
+      - "5434:5432"
 
     volumes:
       - agendaia_postgres_data:/var/lib/postgresql/data
@@ -21,5 +21,20 @@ services:
       timeout: 5s
       retries: 10
 
+  # Almacenamiento de archivos (QR de cobro, comprobantes de pago).
+  # `server -filer` levanta master, volume y filer en un solo contenedor (suficiente para desarrollo).
+  # El backend habla con el filer (8888); los puertos quedan solo en localhost, nunca públicos.
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    container_name: agendaia_seaweedfs
+    restart: unless-stopped
+    command: server -dir=/data -filer -ip.bind=0.0.0.0 -volume.max=10
+    ports:
+      - "127.0.0.1:8888:8888" # filer (API de archivos)
+      - "127.0.0.1:9333:9333" # master (panel de estado)
+    volumes:
+      - agendaia_seaweedfs_data:/data
+
 volumes:
   agendaia_postgres_data:
+  agendaia_seaweedfs_data:

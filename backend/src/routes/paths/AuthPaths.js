@@ -4,5 +4,6 @@ module.exports = {
   LOGIN: '/login',
   REFRESH: '/refresh',
   LOGOUT: '/logout',
-  YO: '/yo'
+  YO: '/yo',
+  CAMBIAR_CLAVE: '/cambiar-clave'
 };

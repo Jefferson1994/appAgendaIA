@@ -134,6 +134,53 @@ routes ─► controllers ─► services ─► repositories ─► shared/pris
 
 Los nombres de los parámetros (por ejemplo `canal_id` con guion bajo) **no se cambian**: n8n depende de ellos.
 
+### Configuración de módulos (solo super admin)
+
+Todas requieren `Authorization: Bearer <token>` de un usuario `SUPER_ADMIN`; a cualquier otro se le responde 403.
+Un **botón** es una acción del catálogo (`acciones`: Ver, Crear, Editar, Eliminar...) asignada a una pantalla.
+Al asignarla se crea su permiso `<recurso>.<accion>` (ej. `/historia-clinica` + `VER` → `historia_clinica.ver`):
+los roles y `exigirPermiso` siguen trabajando con permisos. El menú envía `Acciones` (códigos de permiso)
+y `Botones` (acción, nombre, ícono y si requiere selección) de cada pantalla.
+
+| Método | URL | Body | Para qué |
+|---|---|---|---|
+| POST | `/configuracion-modulos/consultar` | — | Árbol módulos → pantallas → botones (incluye inactivos) y el catálogo de acciones |
+| POST | `/configuracion-modulos/modulos/guardar` | `moduloId?`, `codigo` (solo al crear, `MAYUSCULAS_CON_GUION_BAJO`), `nombre`, `descripcion?`, `icono?` (lucide, ej. `bar-chart`), `orden?`, `esBase?` | Crea o edita un módulo |
+| POST | `/configuracion-modulos/modulos/estado` | `moduloId`, `activo` | Activa o desactiva un módulo |
+| POST | `/configuracion-modulos/pantallas/guardar` | `pantallaId?`, `moduloId`, `codigo` (solo al crear), `nombre`, `ruta` (un solo segmento, ej. `/historia-clinica`), `icono?`, `orden?`, `soloPlataforma?` | Crea o edita una pantalla de un módulo |
+| POST | `/configuracion-modulos/pantallas/estado` | `pantallaId`, `activo` | Activa o desactiva una pantalla |
+| POST | `/configuracion-modulos/pantallas/acciones` | `pantallaId`, `accionIds` | Agrega acciones del catálogo a la pantalla (las que ya tiene se ignoran) |
+| POST | `/configuracion-modulos/botones/eliminar` | `botonId` | Elimina un botón que no use ningún rol ni el código del backend |
+
+Reglas:
+- Los códigos no se editan después de crearse: los referencian roles, seeds y `config/permisos.js`.
+- La ruta de una pantalla es única y de un solo segmento, porque el front abre el feature con ese nombre.
+- `soloPlataforma = true` oculta la pantalla y sus botones a todos menos al super admin, aunque el módulo sea base.
+- La pantalla que contiene `modulos.gestionar` (Configuración de módulos) y su módulo no se pueden desactivar.
+- El administrador de empresa recibe todos los permisos de los módulos de su empresa, incluidos los botones nuevos; el personal, los de su rol.
+
+### Planes y suscripciones
+
+**Módulos de una empresa** = módulos base + módulos de su plan vigente + módulos comprados sueltos (`organizaciones_modulos`).
+Una empresa recién registrada no tiene plan: solo ve los módulos base hasta elegir uno.
+
+| Método | URL | Quién | Body | Para qué |
+|---|---|---|---|---|
+| POST | `/planes/consultar` | Super admin | — | Planes con sus módulos y módulos vendibles con su precio suelto |
+| POST | `/planes/guardar` | Super admin | `planId?`, `codigo` (solo al crear), `nombre`, `descripcion?`, `precio`, `moneda?`, `periodicidad?` (`MENSUAL`/`ANUAL`), `orden?`, `moduloIds` | Crea o edita un plan; `moduloIds` reemplaza su lista de módulos |
+| POST | `/planes/estado` | Super admin | `planId`, `activo` | Un plan inactivo ya no se ofrece; las empresas suscritas lo conservan |
+| POST | `/planes/modulos/precio` | Super admin | `moduloId`, `precio?` (vacío = no se vende suelto), `moneda?`, `periodicidad?` | Precio de venta del módulo suelto |
+| POST | `/suscripcion/consultar` | Admin de empresa | — | Plan vigente, planes disponibles, módulos sueltos contratados y disponibles, historial |
+| POST | `/suscripcion/cambiar-plan` | Admin de empresa | `planId` | Contrata o cambia el plan; el anterior queda `FINALIZADA` en el historial |
+| POST | `/suscripcion/modulos/comprar` | Admin de empresa | `moduloId` | Compra un módulo suelto que no esté en su plan |
+| POST | `/suscripcion/modulos/cancelar` | Admin de empresa | `moduloId` | Cancela un módulo suelto (queda la fecha de fin) |
+
+Cada suscripción y cada módulo suelto guarda el precio, la moneda y la periodicidad del momento de la compra.
+
+**Pasarela de pago:** hoy no hay; `services/CobroSuscripcionesService.js` deja lo contratado `VIGENTE` al instante.
+Para conectarla, ese servicio debe crear la orden de cobro y devolver `PENDIENTE_PAGO` con su referencia,
+y un webhook nuevo pasa la suscripción a `VIGENTE` al confirmar el pago.
+
 ---
 
 ## 5. Reglas de negocio importantes

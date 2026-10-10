@@ -4,13 +4,15 @@ const AppError = require('../errors/AppError');
 const MSG = require('../config/mensajes');
 const { HTTP, TIPO_ACCESO, TRANSACCION_OPCIONES } = require('../config/constantes');
 const proveedor = require('../security/proveedores');
-const { hashear } = require('../security/passwords');
+const { hashear, comparar } = require('../security/passwords');
 const SesionEB = require('../eb/SesionEB');
 const UsuarioEB = require('../eb/UsuarioEB');
 const UsuariosRepository = require('../repositories/UsuariosRepository');
 const PersonasRepository = require('../repositories/PersonasRepository');
 const RolesRepository = require('../repositories/RolesRepository');
 const AccesoService = require('./AccesoService');
+const ProfesionalesService = require('./ProfesionalesService');
+const CategoriasService = require('./CategoriasService');
 const OrganizacionesRepository = require('../repositories/OrganizacionesRepository');
 
 // Código de la plantilla de rol que recibe el administrador de una empresa nueva.
@@ -22,8 +24,19 @@ async function describirUsuario(usuario) {
   return new UsuarioEB(usuario, await AccesoService.obtenerAcceso(usuario));
 }
 
-async function describirUsuario(usuario) {
-  return new UsuarioEB(usuario, await AccesoService.obtenerAcceso(usuario));
+// Cambio de clave del propio usuario (obligatorio en el primer ingreso con clave temporal).
+// Devuelve el usuario actualizado para que el front deje de pedir el cambio.
+async function cambiarClave(usuario, { claveActual, claveNueva }) {
+  const correcta = usuario.passwordHash && (await comparar(claveActual, usuario.passwordHash));
+  if (!correcta) {
+    throw new AppError(MSG.CLAVE_ACTUAL_INCORRECTA, HTTP.PETICION_INVALIDA);
+  }
+
+  await UsuariosRepository.actualizar(usuario.id, {
+    passwordHash: await hashear(claveNueva),
+    esClaveTemporal: false
+  });
+  return describirUsuario(await UsuariosRepository.buscarConAcceso(usuario.id));
 }
 
 // La identidad la entrega el proveedor; la autorización siempre sale de nuestra base.
@@ -92,9 +105,14 @@ function generarCodigoOrganizacion(nombre) {
   return `${base || 'org'}-${crypto.randomBytes(3).toString('hex')}`;
 }
 
-// Persona (representante), organización y usuario administrador, todo o nada.
+// Persona (representante), organización, su profesional (si atiende citas) y usuario administrador, todo o nada.
 async function registrarEmpresa({ administrador, organizacion }, contexto) {
   await exigirCorreoLibre(administrador.email);
+
+  // El tipo de negocio decide si el dueño puede ser profesional y qué cargos existen.
+  const perfil = await CategoriasService.exigirSubcategoriaParaRegistro(organizacion.categoriaId);
+  const cargo = CategoriasService.exigirCargoDelPerfil(perfil, administrador.cargoId);
+  const esProfesional = administrador.esProfesional && CategoriasService.reservaPersonas(perfil.reserva);
 
   const rol = await RolesRepository.buscarPlantillaPorCodigo(ROL_ADMIN_EMPRESA);
   if (!rol) {
@@ -128,6 +146,20 @@ async function registrarEmpresa({ administrador, organizacion }, contexto) {
         tx
       );
 
+      // Empresa de una persona: el dueño también es el profesional que atiende.
+      const profesional = esProfesional
+        ? await ProfesionalesService.crearDesdePersona(
+            {
+              organizacionId: creada.id,
+              persona: administrador,
+              cargo: cargo ? cargo.nombre : null,
+              observacion: administrador.cargoObservacion,
+              zonaHoraria
+            },
+            tx
+          )
+        : null;
+
       await UsuariosRepository.crear(
         {
           personaId: persona.id,
@@ -136,6 +168,9 @@ async function registrarEmpresa({ administrador, organizacion }, contexto) {
           tipoAcceso: TIPO_ACCESO.ADMIN_EMPRESA,
           organizacionId: creada.id,
           rolId: rol.id,
+          profesionalId: profesional ? profesional.id : null,
+          cargoId: cargo ? cargo.id : null,
+          cargoObservacion: administrador.cargoObservacion,
           activo: true
         },
         tx
@@ -150,6 +185,7 @@ async function registrarEmpresa({ administrador, organizacion }, contexto) {
 
 module.exports = {
   describirUsuario,
+  cambiarClave,
   login,
   refrescar,
   cerrarSesion,

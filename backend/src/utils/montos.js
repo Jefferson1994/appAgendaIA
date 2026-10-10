@@ -17,4 +17,7 @@ function mismoMonto(a, b) {
   return Math.round(Number(a) * 100) === Math.round(Number(b) * 100);
 }
 
-module.exports = { normalizarMonto, mismoMonto };
+// Decimal de Prisma (o null) a number para las respuestas.
+const aNumero = (valor) => (valor === null || valor === undefined ? null : Number(valor));
+
+module.exports = { normalizarMonto, mismoMonto, aNumero };
