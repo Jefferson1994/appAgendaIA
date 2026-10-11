@@ -9,6 +9,7 @@ const HorariosRepository = require('../repositories/HorariosRepository');
 const ExcepcionesHorarioRepository = require('../repositories/ExcepcionesHorarioRepository');
 const CitasRepository = require('../repositories/CitasRepository');
 const { calcularDias } = require('./DisponibilidadCalculador');
+const { horarioEfectivo } = require('../utils/horarios');
 
 const aFechaUtc = (fecha) => new Date(Date.UTC(fecha.year, fecha.month - 1, fecha.day));
 
@@ -50,7 +51,11 @@ async function obtenerDisponibilidad({ profesionalId, servicioId, desde, dias, d
   const cantidadDias = limitarDias(dias);
   const fechaFinal = fechaInicial.plus({ days: cantidadDias - 1 }).endOf('day');
 
-  const horarios = await HorariosRepository.listarActivosPorProfesional(profesional.id, db);
+  // Su horario dentro del de la empresa; sin horario propio, el de la empresa.
+  const horarios = horarioEfectivo(
+    await HorariosRepository.listarActivosPorProfesional(profesional.id, db),
+    await HorariosRepository.listarDeOrganizacion(profesional.organizacionId, db)
+  );
   const excepciones = await ExcepcionesHorarioRepository.listarPorRango(
     profesional.id,
     aFechaUtc(fechaInicial),

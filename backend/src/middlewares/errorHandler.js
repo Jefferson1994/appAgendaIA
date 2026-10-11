@@ -2,7 +2,7 @@ const { fail } = require('../utils/respuesta');
 const { HTTP } = require('../config/constantes');
 const MSG = require('../config/mensajes');
 
-function errorHandler(error, req, res, next) {
+function errorHandler(error, req, res, _next) {
   if (error.type === 'entity.parse.failed') {
     return fail(res, MSG.JSON_INVALIDO, HTTP.PETICION_INVALIDA);
   }

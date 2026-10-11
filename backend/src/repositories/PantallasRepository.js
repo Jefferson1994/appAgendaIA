@@ -25,13 +25,6 @@ function buscarConBotones(id, db = prisma) {
   return db.pantalla.findUnique({ where: { id }, include: CON_BOTONES });
 }
 
-function listarPorModulo(moduloId, db = prisma) {
-  return db.pantalla.findMany({
-    where: { moduloId },
-    orderBy: [{ orden: 'asc' }, { nombre: 'asc' }]
-  });
-}
-
 function crear(datos, db = prisma) {
   return db.pantalla.create({ data: datos });
 }
@@ -46,7 +39,6 @@ module.exports = {
   buscarPorId,
   buscarPorRuta,
   buscarConBotones,
-  listarPorModulo,
   crear,
   actualizar
 };

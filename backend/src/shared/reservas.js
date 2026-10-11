@@ -61,7 +61,6 @@ async function expirarReservasVencidas(db, profesionalId) {
 module.exports = {
   ESTADOS_RESERVA_EXPIRABLES,
   ESTADOS_CITA_BLOQUEANTES,
-  obtenerMinutosReserva,
   calcularExpiracionReserva,
   expirarReservasVencidas
 };

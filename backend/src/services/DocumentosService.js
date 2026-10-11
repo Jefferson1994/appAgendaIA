@@ -30,7 +30,7 @@ function exigirFormato(contenido, mimeDeclarado, permitidos) {
 // Nombre original sin rutas ni caracteres de control, recortado al largo de la columna.
 function limpiarNombre(nombre) {
   const base = String(nombre || 'archivo').split(/[\\/]/).pop();
-  return base.replace(/[\u0000-\u001f]/g, '').slice(0, LONGITUD_DOCUMENTOS.NOMBRE_ORIGINAL) || 'archivo';
+  return base.replace(/\p{Cc}/gu, '').slice(0, LONGITUD_DOCUMENTOS.NOMBRE_ORIGINAL) || 'archivo';
 }
 
 // carpeta-raíz/empresa-7/qr_cobro/2026/10/<uuid>.png

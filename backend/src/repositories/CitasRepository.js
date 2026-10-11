@@ -67,6 +67,13 @@ function actualizar(id, datos, db = prisma) {
   return db.cita.update({ where: { id }, data: datos });
 }
 
+const INCLUDE_AGENDA = {
+  cliente: true,
+  servicio: true,
+  profesional: true,
+  pagos: { orderBy: { fechaCreacion: 'desc' }, take: 1 }
+};
+
 // Citas de una empresa en un rango, para la pantalla de agenda.
 // Una reserva temporal o pendiente cuyo plazo ya venció no se muestra, aunque la limpieza automática
 // todavía no la haya marcado como expirada.
@@ -82,9 +89,18 @@ function listarAgenda({ organizacionId, profesionalId, desde, hasta, estados, ah
         { fechaExpiracionReserva: { gt: ahora } }
       ]
     },
-    include: { cliente: true, servicio: true, profesional: true },
+    include: INCLUDE_AGENDA,
     orderBy: { fechaInicio: 'asc' }
   });
+}
+
+// Una cita de la empresa con lo que muestra la agenda (cliente, servicio, profesional y último pago).
+function buscarParaAgenda(id, organizacionId, db = prisma) {
+  return db.cita.findFirst({ where: { id, organizacionId }, include: INCLUDE_AGENDA });
+}
+
+function crear(datos, db = prisma) {
+  return db.cita.create({ data: datos });
 }
 
 module.exports = {
@@ -95,5 +111,7 @@ module.exports = {
   buscarPorId,
   buscarUltimaPorTelefono,
   listarAgenda,
+  buscarParaAgenda,
+  crear,
   actualizar
 };

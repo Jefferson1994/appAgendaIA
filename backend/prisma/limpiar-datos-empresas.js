@@ -26,10 +26,13 @@ const PASOS = [
   ['Citas', (db) => db.cita, {}],
   ['Canales de atención', (db) => db.canalAtencion, {}],
   ['Medios de cobro', (db) => db.medioCobro, {}],
+  ['Fotos de servicios', (db) => db.servicioFoto, {}],
+  ['Fotos de profesionales e instalaciones', (db) => db.recursoFoto, {}],
   // Solo los metadatos: los archivos quedan en SeaweedFS (bórralos con su volumen si quieres).
   ['Documentos de empresas', (db) => db.documento, DE_EMPRESA],
   ['Excepciones de horario', (db) => db.excepcionHorario, {}],
   ['Horarios de profesionales', (db) => db.horarioProfesional, {}],
+  ['Horarios de empresas', (db) => db.horarioOrganizacion, {}],
   ['Servicios por profesional', (db) => db.profesionalServicio, {}],
   ['Sesiones (refresh tokens) de empresas', (db) => db.refreshToken, { usuario: NO_SUPER_ADMIN }],
   ['Usuarios de empresas', (db) => db.usuario, NO_SUPER_ADMIN],

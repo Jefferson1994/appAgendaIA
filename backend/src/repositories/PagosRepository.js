@@ -30,7 +30,18 @@ function actualizar(id, datos, db = prisma) {
   return db.pago.update({ where: { id }, data: datos });
 }
 
+// El personal confirma a mano que recibió el pago (transferencia, efectivo) de una cita.
+function confirmarPendientesDeCita(citaId, fechaConfirmacion, db = prisma) {
+  return db.$executeRaw`
+    UPDATE pagos
+    SET estado = 'CONFIRMADO', monto_recibido = monto_esperado, fecha_confirmacion = ${fechaConfirmacion},
+        fecha_actualizacion = now()
+    WHERE cita_id = ${citaId} AND estado IN ('PENDIENTE', 'COMPROBANTE_RECIBIDO', 'EN_CONCILIACION')
+  `;
+}
+
 module.exports = {
+  confirmarPendientesDeCita,
   buscarPendientePorCita,
   buscarUltimoPorCita,
   buscarPorReferenciaCobro,

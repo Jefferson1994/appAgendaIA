@@ -1,7 +1,9 @@
 const AppError = require('../errors/AppError');
 const MSG = require('../config/mensajes');
-const { HTTP, TIPO_ACCESO, ALCANCE_ROL } = require('../config/constantes');
+const { HTTP, TIPO_ACCESO, ALCANCE_ROL, TERMINO_CLIENTE_DEFECTO } = require('../config/constantes');
 const ModulosRepository = require('../repositories/ModulosRepository');
+const OrganizacionesRepository = require('../repositories/OrganizacionesRepository');
+const CategoriasService = require('./CategoriasService');
 const PermisosRepository = require('../repositories/PermisosRepository');
 const OrganizacionModulosRepository = require('../repositories/OrganizacionModulosRepository');
 const SuscripcionesRepository = require('../repositories/SuscripcionesRepository');
@@ -40,6 +42,38 @@ async function modulosPermitidos(usuario) {
 // Las pantallas de plataforma (soloPlataforma) son exclusivas del super admin, aunque su módulo sea base.
 const pantallaVisiblePara = (usuario, pantalla) =>
   !pantalla.soloPlataforma || usuario.tipoAcceso === TIPO_ACCESO.SUPER_ADMIN;
+
+// Lo que depende del negocio de la empresa: los tipos de recurso que usa (null = super admin:
+// todos) y cómo llama a sus clientes (null = super admin: el nombre de la pantalla tal cual).
+async function negocioDe(usuario) {
+  if (usuario.tipoAcceso === TIPO_ACCESO.SUPER_ADMIN) return { tipos: null, terminoCliente: null };
+  const categoriaId = usuario.organizacion ? usuario.organizacion.categoriaId : null;
+  const { reserva, terminoCliente } = await CategoriasService.perfilDeCategoria(categoriaId);
+  return { tipos: CategoriasService.tiposRecursoDe(reserva), terminoCliente: terminoCliente || TERMINO_CLIENTE_DEFECTO };
+}
+
+async function tiposRecursoPermitidos(usuario) {
+  return (await negocioDe(usuario)).tipos;
+}
+
+// Pantallas con `nombrePorNegocio` toman el término del negocio (Pacientes en una clínica,
+// Clientes en una cancha); su módulo también, si se llamaba igual que la pantalla.
+function nombrarPorNegocio(menu, termino) {
+  if (!termino) return menu;
+  return menu.map((modulo) => {
+    const renombradas = modulo.pantallas.filter((pantalla) => pantalla.nombrePorNegocio);
+    return {
+      ...modulo,
+      nombre: renombradas.some((pantalla) => pantalla.nombre === modulo.nombre) ? termino : modulo.nombre,
+      pantallas: modulo.pantallas.map((pantalla) => (pantalla.nombrePorNegocio ? { ...pantalla, nombre: termino } : pantalla))
+    };
+  });
+}
+
+// Una pantalla atada a un tipo de recurso (Profesionales, Instalaciones) solo se ofrece a
+// las empresas cuyo negocio lo usa: una cancha no ve "Profesionales" ni una clínica "Instalaciones".
+const aplicaAlNegocio = (pantalla, tipos) =>
+  !pantalla.tipoRecurso || tipos === null || tipos.includes(pantalla.tipoRecurso.codigo);
 
 // Un permiso vale si su pantalla está activa, es visible para el usuario y su módulo está permitido.
 // Los permisos sin pantalla no dependen de ningún módulo.
@@ -89,7 +123,7 @@ function botonesConcedidos(pantalla, concedidos) {
 }
 
 // Administradores ven todas las pantallas de sus módulos; el personal, solo las de su rol.
-async function construirMenu(usuario, permisos, permitidos) {
+async function construirMenu(usuario, permisos, permitidos, tipos) {
   if (usuario.tipoAcceso === TIPO_ACCESO.CLIENTE) {
     return [];
   }
@@ -107,7 +141,7 @@ async function construirMenu(usuario, permisos, permitidos) {
     .map((modulo) => ({
       ...modulo,
       pantallas: modulo.pantallas
-        .filter((pantalla) => pantallaVisiblePara(usuario, pantalla))
+        .filter((pantalla) => pantallaVisiblePara(usuario, pantalla) && aplicaAlNegocio(pantalla, tipos))
         // `paraTodos` (p. ej. Mi perfil): la ve cualquier usuario aunque su rol no la tenga.
         .filter((pantalla) => verTodas || pantalla.paraTodos || pantallasDelRol.has(pantalla.id))
         .map((pantalla) => ({
@@ -125,7 +159,8 @@ async function construirMenu(usuario, permisos, permitidos) {
 async function obtenerAcceso(usuario) {
   const permitidos = await modulosPermitidos(usuario);
   const permisos = await permisosDe(usuario, permitidos);
-  const menu = await construirMenu(usuario, permisos, permitidos);
+  const negocio = await negocioDe(usuario);
+  const menu = nombrarPorNegocio(await construirMenu(usuario, permisos, permitidos, negocio.tipos), negocio.terminoCliente);
 
   return { permisos, menu };
 }
@@ -148,4 +183,25 @@ function resolverAlcance(usuario, profesionalSolicitado = null) {
   return { organizacionId: usuario.organizacionId, profesionalId: profesionalSolicitado };
 }
 
-module.exports = { modulosPermitidos, permisosDe, obtenerAcceso, resolverAlcance };
+// Empresa y alcance de una pantalla de empresa. El super admin elige la empresa
+// (`organizacionId`); para cualquier otro usuario se ignora y se usa la de su token.
+async function resolverEmpresaYAlcance(usuario, { organizacionId = null, profesionalId = null } = {}) {
+  if (usuario.tipoAcceso === TIPO_ACCESO.SUPER_ADMIN) {
+    if (!organizacionId) throw new AppError(MSG.EMPRESA_REQUERIDA, HTTP.PETICION_INVALIDA);
+    const organizacion = await OrganizacionesRepository.buscarActivaPorId(organizacionId);
+    if (!organizacion) throw new AppError(MSG.ORGANIZACION_NO_ENCONTRADA, HTTP.NO_ENCONTRADO);
+    return { organizacion, alcance: { organizacionId: organizacion.id, profesionalId } };
+  }
+  return { organizacion: usuario.organizacion, alcance: resolverAlcance(usuario, profesionalId) };
+}
+
+module.exports = {
+  modulosPermitidos,
+  permisosDe,
+  obtenerAcceso,
+  resolverAlcance,
+  resolverEmpresaYAlcance,
+  tiposRecursoPermitidos,
+  negocioDe,
+  aplicaAlNegocio
+};

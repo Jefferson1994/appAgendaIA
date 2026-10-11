@@ -47,6 +47,12 @@ const cobrosRoutes = require('./routes/cobros.routes');
 const CobrosPaths = require('./routes/paths/CobrosPaths');
 const perfilRoutes = require('./routes/perfil.routes');
 const PerfilPaths = require('./routes/paths/PerfilPaths');
+const inicioRoutes = require('./routes/inicio.routes');
+const InicioPaths = require('./routes/paths/InicioPaths');
+const recursosRoutes = require('./routes/recursos.routes');
+const empresaRoutes = require('./routes/empresa.routes');
+const EmpresaPaths = require('./routes/paths/EmpresaPaths');
+const RecursosPaths = require('./routes/paths/RecursosPaths');
 
 
 const app = express();
@@ -55,9 +61,14 @@ app.use(express.json());
 app.use(limitadorGeneral);
 // Estas rutas son consultas (aunque usen POST): solo cuentan para el límite general.
 const RUTAS_DE_CONSULTA = [
-  AgendaPaths.BASE,
+  `${AgendaPaths.BASE}${AgendaPaths.CONSULTAR}`,
+  `${AgendaPaths.BASE}${AgendaPaths.OPCIONES}`,
+  `${AgendaPaths.BASE}${AgendaPaths.DISPONIBILIDAD}`,
+  `${AgendaPaths.BASE}${AgendaPaths.CLIENTES}`,
+  `${EmpresaPaths.BASE}${EmpresaPaths.CONSULTAR}`,
   `${ClientesConsultaPaths.BASE}${ClientesConsultaPaths.CONSULTAR}`,
   `${CatalogoServiciosPaths.BASE}${CatalogoServiciosPaths.CONSULTAR}`,
+  `${CatalogoServiciosPaths.BASE}${CatalogoServiciosPaths.OPCIONES}`,
   `${ConfiguracionModulosPaths.BASE}${ConfiguracionModulosPaths.CONSULTAR}`,
   `${PlanesPaths.BASE}${PlanesPaths.CONSULTAR}`,
   `${SuscripcionPaths.BASE}${SuscripcionPaths.CONSULTAR}`,
@@ -68,7 +79,9 @@ const RUTAS_DE_CONSULTA = [
   `${CatalogosPaths.BASE}${CatalogosPaths.CONSULTAR}`,
   `${CobrosPaths.BASE}${CobrosPaths.CONSULTAR}`,
   `${CobrosPaths.BASE}${CobrosPaths.MIOS_CONSULTAR}`,
-  `${PerfilPaths.BASE}${PerfilPaths.CONSULTAR}`
+  `${PerfilPaths.BASE}${PerfilPaths.CONSULTAR}`,
+  `${InicioPaths.BASE}${InicioPaths.RESUMEN}`,
+  `${RecursosPaths.BASE}${RecursosPaths.CONSULTAR}`
 ];
 app.post('*', (req, res, next) =>
   RUTAS_DE_CONSULTA.some((ruta) => req.path.startsWith(ruta)) ? next() : limitadorEscritura(req, res, next)
@@ -103,6 +116,9 @@ app.use(CatalogosPaths.BASE, catalogosRoutes);
 app.use(DocumentosPaths.BASE, documentosRoutes);
 app.use(CobrosPaths.BASE, cobrosRoutes);
 app.use(PerfilPaths.BASE, perfilRoutes);
+app.use(InicioPaths.BASE, inicioRoutes);
+app.use(RecursosPaths.BASE, recursosRoutes);
+app.use(EmpresaPaths.BASE, empresaRoutes);
 
 // Debe ir al final de las rutas.
 app.use(errorHandler);

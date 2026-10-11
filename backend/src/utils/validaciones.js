@@ -94,7 +94,36 @@ function validarListaIds(valor, campo, { maximo, permitirVacia = true }) {
   return [...new Set(valor.map((id) => validarIdPositivo(id, campo)))];
 }
 
+const FORMATO_CEDULA = /^\d{10}$/;
+const PROVINCIAS_CEDULA = { MIN: 1, MAX: 24, EXTERIOR: 30 };
+
+// Dígito verificador de la cédula ecuatoriana (módulo 10): provincia válida, tercer dígito
+// menor a 6 y el último dígito calculado con los coeficientes 2,1,2,1...
+function digitoCedulaCorrecto(cedula) {
+  const provincia = Number(cedula.slice(0, 2));
+  const provinciaValida =
+    (provincia >= PROVINCIAS_CEDULA.MIN && provincia <= PROVINCIAS_CEDULA.MAX) || provincia === PROVINCIAS_CEDULA.EXTERIOR;
+  if (!provinciaValida || Number(cedula[2]) >= 6) return false;
+
+  const suma = cedula
+    .slice(0, 9)
+    .split('')
+    .reduce((total, digito, indice) => {
+      const producto = Number(digito) * (indice % 2 === 0 ? 2 : 1);
+      return total + (producto > 9 ? producto - 9 : producto);
+    }, 0);
+  return (10 - (suma % 10)) % 10 === Number(cedula[9]);
+}
+
+// Siempre exige 10 dígitos. El dígito verificador se revisa salvo VALIDAR_DIGITO_CEDULA=false
+// (solo en desarrollo, para probar con cédulas inventadas).
+function esCedulaValida(cedula) {
+  if (!FORMATO_CEDULA.test(cedula)) return false;
+  return process.env.VALIDAR_DIGITO_CEDULA === 'false' || digitoCedulaCorrecto(cedula);
+}
+
 module.exports = {
+  esCedulaValida,
   estaVacio,
   validarIdPositivo,
   validarIdOpcional,

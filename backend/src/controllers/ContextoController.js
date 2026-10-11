@@ -6,7 +6,8 @@ const MediosCobroCanalEB = require('../eb/MediosCobroCanalEB');
 const { enviarArchivo } = require('./DocumentosController');
 const ContextoPaths = require('../routes/paths/ContextoPaths');
 const AppError = require('../errors/AppError');
-const { HTTP } = require('../config/constantes');
+const { HTTP, DOCUMENTOS_PARA_BOT } = require('../config/constantes');
+const DocumentosRepository = require('../repositories/DocumentosRepository');
 const { validarIdPositivo } = require('../utils/validaciones');
 const ServiciosService = require('../services/ServiciosService');
 const ContextoRequest = require('../dto/request/ContextoRequest');
@@ -19,10 +20,18 @@ async function resolverPorCanal(req, res) {
   const { identificador } = ContextoRequest.validarCanal(req.params);
   const canal = await CanalesService.resolverCanalActivo(identificador);
   const { relaciones } = await ServiciosService.listarPorCanal(identificador);
-  const servicios = relaciones.map((relacion) => new ServicioEB(relacion, canal.profesional));
+  const rutaFoto = (documentoId) => rutaDocumento(identificador, documentoId);
+  const servicios = relaciones.map((relacion) => new ServicioEB(relacion, canal.profesional, rutaFoto));
 
   return ok(res, new ContextoEB(canal, servicios), MSG.CONTEXTO_OK);
 }
+
+// Ruta de un documento del canal (fotos de servicios), relativa al backend.
+const rutaDocumento = (identificador, documentoId) =>
+  `${ContextoPaths.BASE}${ContextoPaths.DOCUMENTO.replace(':identificador', encodeURIComponent(identificador)).replace(
+    ':documentoId',
+    documentoId
+  )}`;
 
 // Ruta del QR de un medio, relativa al backend, para que el bot la descargue.
 const rutaQr = (identificador, medioId) =>
@@ -51,4 +60,16 @@ async function qrMedioCobro(req, res) {
   return enviarArchivo(res, await DocumentosService.leerContenido(medio.qrDocumento));
 }
 
-module.exports = { resolverPorCanal, mediosCobro, qrMedioCobro };
+// Archivo de la empresa del canal que el bot puede mandar (fotos de servicios, QR).
+async function documento(req, res) {
+  const { identificador } = ContextoRequest.validarCanal(req.params);
+  const documentoId = validarIdPositivo(req.params.documentoId, 'documentoId');
+  const canal = await CanalesService.resolverCanalActivo(identificador);
+  const encontrado = await DocumentosRepository.buscarActivo(documentoId);
+  const permitido =
+    encontrado && encontrado.organizacionId === canal.organizacionId && DOCUMENTOS_PARA_BOT.includes(encontrado.tipo.codigo);
+  if (!permitido) throw new AppError(MSG.DOCUMENTO_NO_ENCONTRADO, HTTP.NO_ENCONTRADO);
+  return enviarArchivo(res, await DocumentosService.leerContenido(encontrado));
+}
+
+module.exports = { resolverPorCanal, mediosCobro, qrMedioCobro, documento };

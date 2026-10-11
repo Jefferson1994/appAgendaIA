@@ -59,4 +59,13 @@ async function resumirCitas({ organizacionId, profesionalId, clienteIds, estados
   return { totales, pasadas, futuras };
 }
 
-module.exports = { listar, resumirCitas };
+// Con qué profesionales o instalaciones reservó cada cliente (sin repetir).
+function profesionalesDeClientes({ organizacionId, profesionalId, clienteIds }, db = prisma) {
+  return db.cita.findMany({
+    where: { organizacionId, clienteId: { in: clienteIds }, ...(profesionalId ? { profesionalId } : {}) },
+    distinct: ['clienteId', 'profesionalId'],
+    select: { clienteId: true, profesional: { select: { id: true, nombre: true, apellido: true } } }
+  });
+}
+
+module.exports = { listar, resumirCitas, profesionalesDeClientes };

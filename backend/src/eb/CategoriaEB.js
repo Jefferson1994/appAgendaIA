@@ -9,6 +9,7 @@ class CategoriaEB {
     this.Descripcion = categoria.descripcion || null;
     this.Icono = categoria.icono || null;
     this.Reserva = categoria.reserva;
+    this.TerminoCliente = categoria.terminoCliente || null;
     this.Orden = categoria.orden;
     this.Activo = categoria.activo;
     this.Empresas = categoria._count ? categoria._count.organizaciones : 0;

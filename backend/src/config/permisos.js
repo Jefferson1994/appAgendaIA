@@ -8,8 +8,18 @@ const PERMISOS = {
   SERVICIOS_GESTIONAR: 'servicios.gestionar',
   PROFESIONALES_VER: 'profesionales.ver',
   PROFESIONALES_GESTIONAR: 'profesionales.gestionar',
+  // Instalaciones (canchas, mesas, salas): lo que se reserva cuando no es una persona.
+  INSTALACIONES_VER: 'instalaciones.ver',
+  INSTALACIONES_GESTIONAR: 'instalaciones.gestionar',
+  // Datos de la empresa: por ahora su horario de atención.
+  EMPRESA_GESTIONAR: 'empresa.gestionar',
   PAGOS_VER: 'pagos.ver',
+  // Usuarios: entrar a la pantalla (gestionar) y un permiso por botón (<ruta>.<accion>).
   USUARIOS_GESTIONAR: 'usuarios.gestionar',
+  USUARIOS_CREAR: 'usuarios.crear',
+  USUARIOS_EDITAR: 'usuarios.editar',
+  USUARIOS_CAMBIAR_ESTADO: 'usuarios.cambiar_estado',
+  USUARIOS_RESTABLECER_CLAVE: 'usuarios.restablecer_clave',
   ROLES_GESTIONAR: 'roles.gestionar',
   // Administración de la plataforma (solo super admin)
   MODULOS_GESTIONAR: 'modulos.gestionar',

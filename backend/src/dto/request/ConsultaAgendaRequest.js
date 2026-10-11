@@ -2,7 +2,7 @@ const { DateTime } = require('luxon');
 const AppError = require('../../errors/AppError');
 const MSG = require('../../config/mensajes');
 const { HTTP, AGENDA } = require('../../config/constantes');
-const { validarIdPositivo } = require('../../utils/validaciones');
+const { validarIdPositivo, validarIdOpcional } = require('../../utils/validaciones');
 
 const FORMATO_FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -30,7 +30,7 @@ function validarFiltro(valor) {
 }
 
 // POST /citas/agenda. Todo es opcional: sin fechas se muestra el día de hoy de la empresa.
-// La empresa no viaja en el body: sale del usuario autenticado.
+// La empresa sale del usuario autenticado; solo el super admin manda `organizacionId`.
 function validarConsultaAgenda(body = {}) {
   const desde = vacio(body.desde) ? null : validarFecha(body.desde, 'desde');
   const hasta = vacio(body.hasta) ? null : validarFecha(body.hasta, 'hasta');
@@ -47,6 +47,7 @@ function validarConsultaAgenda(body = {}) {
   }
 
   return {
+    organizacionId: validarIdOpcional(body.organizacionId, 'organizacionId'),
     desde,
     hasta,
     filtro: validarFiltro(body.filtro),

@@ -5,6 +5,8 @@ const UsuarioEmpresaEB = require('../eb/UsuarioEmpresaEB');
 const CredencialUsuarioEB = require('../eb/CredencialUsuarioEB');
 const MSG = require('../config/mensajes');
 const { HTTP } = require('../config/constantes');
+const { PERMISOS } = require('../config/permisos');
+const { exigirPermisoCargado } = require('../middlewares/autorizacion');
 const { ok } = require('../utils/respuesta');
 
 // Usuarios de la empresa del usuario autenticado. El super admin elige la empresa (organizacionId).
@@ -20,6 +22,7 @@ async function consultar(req, res) {
 // Al crear responde la credencial (con la clave temporal si no hubo correo); al editar, el usuario.
 async function guardar(req, res) {
   const datos = UsuarioEmpresaRequest.validarGuardarUsuario(req.body);
+  exigirPermisoCargado(req, datos.usuarioId ? PERMISOS.USUARIOS_EDITAR : PERMISOS.USUARIOS_CREAR);
   const resultado = await UsuariosService.guardar(req.usuario, datos);
 
   if (datos.usuarioId) {

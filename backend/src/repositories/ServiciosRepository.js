@@ -12,7 +12,7 @@ function listarPorProfesional(profesionalId, texto, db = prisma) {
 
   return db.profesionalServicio.findMany({
     where: { profesionalId, activo: true, servicio: filtroServicio },
-    include: { servicio: true }
+    include: { servicio: { include: { fotos: { orderBy: { orden: 'asc' } } } } }
   });
 }
 

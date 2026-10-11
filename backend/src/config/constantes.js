@@ -26,6 +26,7 @@ const ESTADOS_CITA = {
 const ESTADOS_PAGO = {
   PENDIENTE: 'PENDIENTE',
   EXPIRADO: 'EXPIRADO',
+  COMPROBANTE_RECIBIDO: 'COMPROBANTE_RECIBIDO',
   EN_CONCILIACION: 'EN_CONCILIACION',
   CONFIRMADO: 'CONFIRMADO'
 };
@@ -34,6 +35,18 @@ const PROVEEDOR_PAGO = { SIMULADOR: 'SIMULADOR', PAYPHONE: 'PAYPHONE' };
 
 const ESTADOS_RESERVA_EXPIRABLES = [ESTADOS_CITA.RESERVA_TEMPORAL, ESTADOS_CITA.PENDIENTE_PAGO];
 const ESTADOS_CITA_BLOQUEANTES = [...ESTADOS_RESERVA_EXPIRABLES, ESTADOS_CITA.CONFIRMADA, ESTADOS_CITA.ATENDIDA];
+
+// Desde cada estado, a cuáles puede pasar una cita en la agenda. Atendida y no asistió se
+// pueden deshacer (vuelven a confirmada) por si el personal se equivocó.
+const TRANSICIONES_CITA = {
+  [ESTADOS_CITA.RESERVA_TEMPORAL]: [ESTADOS_CITA.CONFIRMADA, ESTADOS_CITA.CANCELADA],
+  [ESTADOS_CITA.PENDIENTE_PAGO]: [ESTADOS_CITA.CONFIRMADA, ESTADOS_CITA.CANCELADA],
+  [ESTADOS_CITA.CONFIRMADA]: [ESTADOS_CITA.ATENDIDA, ESTADOS_CITA.NO_ASISTIO, ESTADOS_CITA.CANCELADA],
+  [ESTADOS_CITA.ATENDIDA]: [ESTADOS_CITA.CONFIRMADA],
+  [ESTADOS_CITA.NO_ASISTIO]: [ESTADOS_CITA.CONFIRMADA],
+  [ESTADOS_CITA.CANCELADA]: [],
+  [ESTADOS_CITA.EXPIRADA]: []
+};
 
 // Cada filtro de la pantalla de agenda y los estados de cita que incluye.
 const FILTROS_AGENDA = {
@@ -46,7 +59,16 @@ const FILTROS_AGENDA = {
   CONFIRMADAS: [ESTADOS_CITA.CONFIRMADA],
   PENDIENTES: [ESTADOS_CITA.RESERVA_TEMPORAL, ESTADOS_CITA.PENDIENTE_PAGO],
   ATENDIDAS: [ESTADOS_CITA.ATENDIDA],
-  CANCELADAS: [ESTADOS_CITA.CANCELADA, ESTADOS_CITA.NO_ASISTIO, ESTADOS_CITA.EXPIRADA]
+  CANCELADAS: [ESTADOS_CITA.CANCELADA, ESTADOS_CITA.NO_ASISTIO, ESTADOS_CITA.EXPIRADA],
+  // Pantalla de agenda: todo lo del día, también lo cancelado y quien no asistió (cada uno con su color).
+  COMPLETA: [
+    ESTADOS_CITA.RESERVA_TEMPORAL,
+    ESTADOS_CITA.PENDIENTE_PAGO,
+    ESTADOS_CITA.CONFIRMADA,
+    ESTADOS_CITA.ATENDIDA,
+    ESTADOS_CITA.NO_ASISTIO,
+    ESTADOS_CITA.CANCELADA
+  ]
 };
 
 const DIAS_SEMANA = { 1: 'LUNES', 2: 'MARTES', 3: 'MIERCOLES', 4: 'JUEVES', 5: 'VIERNES', 6: 'SABADO', 7: 'DOMINGO' };
@@ -110,7 +132,9 @@ module.exports = {
   },
   // Envío de correos: CORREO_PROVEEDOR en el .env (ninguno | smtp).
   CORREO: { PROVEEDORES: { NINGUNO: 'ninguno', SMTP: 'smtp' } },
-  AGENDA: { FILTROS: FILTROS_AGENDA, FILTRO_DEFECTO: 'TODAS', MAX_DIAS_RANGO: 31 },
+  AGENDA: { FILTROS: FILTROS_AGENDA, FILTRO_DEFECTO: 'TODAS', MAX_DIAS_RANGO: 31, CLIENTES_MAX: 10, NOTAS_MAX: 500 },
+  // Horario de la empresa: mismas franjas por día que un profesional.
+  HORARIO_EMPRESA: { FRANJAS_POR_DIA_MAX: 6 },
   PAGINACION: { PAGINA_DEFECTO: 1, TAMANO_DEFECTO: 20, TAMANO_MAX: 100 },
   // Formatos de la configuración de módulos. La ruta tiene un solo segmento porque el
   // front carga el feature cuya carpeta se llama igual (ej. /historia-clinica).
@@ -137,11 +161,26 @@ module.exports = {
     BANCOS: 'BANCOS',
     BILLETERAS: 'BILLETERAS',
     TIPOS_CUENTA: 'TIPOS_CUENTA',
-    TIPOS_DOCUMENTO: 'TIPOS_DOCUMENTO'
+    TIPOS_DOCUMENTO: 'TIPOS_DOCUMENTO',
+    TIPOS_RECURSO: 'TIPOS_RECURSO',
+    ESTADOS_CITA: 'ESTADOS_CITA'
   },
+  // Cambios de estado que el personal puede hacer desde la agenda.
+  TRANSICIONES_CITA: TRANSICIONES_CITA,
+  // Items de TIPOS_RECURSO: lo que se reserva es una persona o una instalación.
+  TIPOS_RECURSO: { PERSONA: 'PERSONA', ESPACIO: 'ESPACIO' },
+  RECURSOS: { FOTOS_MAX: 3, FRANJAS_POR_DIA_MAX: 6, INTERVALO_MIN: 5, INTERVALO_MAX: 240, INTERVALO_DEFECTO: 30 },
   LONGITUD_CATALOGOS: { CODIGO: 60, NOMBRE: 150, DESCRIPCION: 250 },
   // Items de TIPOS_DOCUMENTO y qué archivos acepta cada uno.
-  TIPOS_DOCUMENTO: { QR_COBRO: 'QR_COBRO', COMPROBANTE_PAGO: 'COMPROBANTE_PAGO' },
+  TIPOS_DOCUMENTO: {
+    QR_COBRO: 'QR_COBRO',
+    COMPROBANTE_PAGO: 'COMPROBANTE_PAGO',
+    FOTO_SERVICIO: 'FOTO_SERVICIO',
+    FOTO_RECURSO: 'FOTO_RECURSO'
+  },
+  // Documentos que el bot puede pedir por el canal para mandarlos por WhatsApp.
+  DOCUMENTOS_PARA_BOT: ['QR_COBRO', 'FOTO_SERVICIO', 'FOTO_RECURSO'],
+  SERVICIOS: { FOTOS_MAX: 3 },
   // Archivos permitidos: extensión y firma (primeros bytes) para no confiar en el nombre ni en el
   // tipo que declara el navegador.
   ARCHIVOS_PERMITIDOS: {
@@ -151,7 +190,9 @@ module.exports = {
   },
   MIME_POR_TIPO_DOCUMENTO: {
     QR_COBRO: ['image/png', 'image/jpeg'],
-    COMPROBANTE_PAGO: ['image/png', 'image/jpeg', 'application/pdf']
+    COMPROBANTE_PAGO: ['image/png', 'image/jpeg', 'application/pdf'],
+    FOTO_SERVICIO: ['image/png', 'image/jpeg'],
+    FOTO_RECURSO: ['image/png', 'image/jpeg']
   },
   LONGITUD_DOCUMENTOS: { NOMBRE_ORIGINAL: 255 },
   // Enum TipoMedioCobro de schema.prisma.
@@ -160,7 +201,9 @@ module.exports = {
   // Enum TipoReserva de schema.prisma: qué reserva el cliente en un tipo de negocio.
   TIPOS_RESERVA: { PERSONAS: 'PERSONAS', ESPACIOS: 'ESPACIOS', AMBOS: 'AMBOS' },
   // Largos de categorias_empresa, cargos y usuarios.cargo_observacion en schema.prisma.
-  LONGITUD_CATEGORIAS: { CODIGO: 60, NOMBRE: 100, DESCRIPCION: 250, ICONO: 60, OBSERVACION_CARGO: 250 },
+  LONGITUD_CATEGORIAS: { CODIGO: 60, NOMBRE: 100, DESCRIPCION: 250, ICONO: 60, OBSERVACION_CARGO: 250, TERMINO_CLIENTE: 40 },
+  // Cómo se llama a quienes reservan cuando el negocio no define otro término.
+  TERMINO_CLIENTE_DEFECTO: 'Clientes',
   // Enums de schema.prisma (EstadoSuscripcion, Periodicidad).
   ESTADOS_SUSCRIPCION: { PENDIENTE_PAGO: 'PENDIENTE_PAGO', VIGENTE: 'VIGENTE', FINALIZADA: 'FINALIZADA' },
   PERIODICIDADES: { MENSUAL: 'MENSUAL', ANUAL: 'ANUAL' },

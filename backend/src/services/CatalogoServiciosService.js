@@ -1,9 +1,12 @@
 const prisma = require('../shared/prisma');
 const AppError = require('../errors/AppError');
 const MSG = require('../config/mensajes');
-const { HTTP, TRANSACCION_OPCIONES } = require('../config/constantes');
+const { HTTP, TRANSACCION_OPCIONES, TIPO_ACCESO, TIPOS_DOCUMENTO, SERVICIOS } = require('../config/constantes');
 const { generarCodigo } = require('../utils/texto');
 const AccesoService = require('./AccesoService');
+const DocumentosService = require('./DocumentosService');
+const OrganizacionesRepository = require('../repositories/OrganizacionesRepository');
+const CategoriasService = require('./CategoriasService');
 const CatalogoServiciosRepository = require('../repositories/CatalogoServiciosRepository');
 
 const CODIGO_SERVICIO_MAX_BASE = 60;
@@ -79,8 +82,40 @@ async function buscarExistente(organizacionId, servicioId) {
   return servicio;
 }
 
-async function consultar(usuario, { texto, incluirInactivos, profesionalId }) {
-  const alcance = AccesoService.resolverAlcance(usuario, profesionalId);
+// Fotos elegidas: imágenes de tipo foto de servicio subidas por la misma empresa. null = no cambiar.
+async function validarFotos(organizacionId, fotoIds) {
+  if (fotoIds === null) return null;
+  if (fotoIds.length > SERVICIOS.FOTOS_MAX) {
+    throw new AppError(MSG.SERVICIO_FOTOS_MAX(SERVICIOS.FOTOS_MAX), HTTP.PETICION_INVALIDA);
+  }
+  for (const documentoId of fotoIds) {
+    const documento = await DocumentosService.documentoDeEmpresa(documentoId, organizacionId, TIPOS_DOCUMENTO.FOTO_SERVICIO);
+    if (!documento) throw new AppError(MSG.SERVICIO_FOTO_INVALIDA, HTTP.PETICION_INVALIDA);
+  }
+  return fotoIds;
+}
+
+// Para el formulario: quién puede ofrecer el servicio y la política de precios de la empresa.
+// El super admin recibe además las empresas; hasta que elige una, no hay más datos.
+async function opciones(usuario, { organizacionId }) {
+  const esPlataforma = usuario.tipoAcceso === TIPO_ACCESO.SUPER_ADMIN;
+  const empresas = esPlataforma ? await OrganizacionesRepository.listarActivas() : null;
+  if (esPlataforma && !organizacionId) {
+    return { empresas, profesionales: [], organizacion: null, soloPropio: false, tipos: [] };
+  }
+
+  const { organizacion, alcance } = await AccesoService.resolverEmpresaYAlcance(usuario, { organizacionId });
+  const { reserva } = await CategoriasService.perfilDeCategoria(organizacion.categoriaId);
+  const tipos = CategoriasService.tiposRecursoDe(reserva);
+  // Solo los profesionales o instalaciones que usa el negocio (una cancha: sus canchas).
+  const profesionales = (await CatalogoServiciosRepository.listarProfesionalesParaAsignar(alcance.organizacionId)).filter(
+    (recurso) => tipos.includes(recurso.tipo.codigo)
+  );
+  return { empresas, profesionales, organizacion, soloPropio: Boolean(alcance.profesionalId), tipos };
+}
+
+async function consultar(usuario, { organizacionId, texto, incluirInactivos, profesionalId }) {
+  const { alcance } = await AccesoService.resolverEmpresaYAlcance(usuario, { organizacionId, profesionalId });
 
   return CatalogoServiciosRepository.listar({
     organizacionId: alcance.organizacionId,
@@ -91,9 +126,10 @@ async function consultar(usuario, { texto, incluirInactivos, profesionalId }) {
 }
 
 async function guardar(usuario, datos) {
-  const alcance = AccesoService.resolverAlcance(usuario);
+  const { organizacion, alcance } = await AccesoService.resolverEmpresaYAlcance(usuario, {
+    organizacionId: datos.organizacionId
+  });
   const { organizacionId, profesionalId: propio } = alcance;
-  const { organizacion } = usuario;
 
   if (propio && !organizacion.profesionalesCreanServicios) {
     throw prohibido(MSG.SERVICIOS_PROPIOS_NO_PERMITIDOS);
@@ -106,6 +142,7 @@ async function guardar(usuario, datos) {
 
   const asignaciones = await resolverAsignaciones(alcance, datos);
   exigirPoliticaDePrecios(organizacion, asignaciones);
+  const fotoIds = await validarFotos(organizacionId, datos.fotoIds);
 
   const campos = {
     nombre: datos.nombre,
@@ -142,14 +179,17 @@ async function guardar(usuario, datos) {
       }
     }
 
+    if (fotoIds) await CatalogoServiciosRepository.reemplazarFotos(servicio.id, fotoIds, tx);
+
     return servicio.id;
   }, TRANSACCION_OPCIONES);
 
   return CatalogoServiciosRepository.buscarPorId(organizacionId, servicioId);
 }
 
-async function cambiarEstado(usuario, { servicioId, activo }) {
-  const { organizacionId, profesionalId: propio } = AccesoService.resolverAlcance(usuario);
+async function cambiarEstado(usuario, { organizacionId: elegida, servicioId, activo }) {
+  const { alcance } = await AccesoService.resolverEmpresaYAlcance(usuario, { organizacionId: elegida });
+  const { organizacionId, profesionalId: propio } = alcance;
 
   const servicio = await buscarExistente(organizacionId, servicioId);
   exigirEditable(servicio, propio);
@@ -158,4 +198,4 @@ async function cambiarEstado(usuario, { servicioId, activo }) {
   return CatalogoServiciosRepository.buscarPorId(organizacionId, servicio.id);
 }
 
-module.exports = { consultar, guardar, cambiarEstado };
+module.exports = { opciones, consultar, guardar, cambiarEstado };

@@ -6,6 +6,7 @@ const aItem = (item) => ({
   Nombre: item.nombre,
   Descripcion: item.descripcion || null,
   Orden: item.orden,
+  Color: item.color || null,
   Activo: item.activo
 });
 

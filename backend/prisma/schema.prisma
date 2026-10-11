@@ -142,6 +142,7 @@ model Organizacion {
   suscripciones          Suscripcion[]
   documentos             Documento[]
   mediosCobro            MedioCobro[]
+  horarios               HorarioOrganizacion[]
 
   representante Persona?          @relation(fields: [representanteId], references: [id])
   categoria     CategoriaEmpresa? @relation(fields: [categoriaId], references: [id])
@@ -154,9 +155,12 @@ model Organizacion {
 // PROFESIONALES
 // =====================================================
 
+// Lo que se reserva: una persona (doctor, barbero) o una instalación (cancha, mesa, sala).
+// `tipoId` = item del catálogo TIPOS_RECURSO (PERSONA o ESPACIO).
 model Profesional {
   id             Int @id @default(autoincrement())
   organizacionId Int @map("organizacion_id")
+  tipoId         Int @map("tipo_id")
 
   codigo String @db.VarChar(50)
 
@@ -187,6 +191,8 @@ model Profesional {
   canalesAtencion CanalAtencion[]
   usuarios        Usuario[]
   mediosCobro     MedioCobro[]
+  fotos           RecursoFoto[]
+  tipo            CatalogoItem          @relation("ProfesionalTipo", fields: [tipoId], references: [id])
 
   @@unique([organizacionId, codigo])
   @@index([organizacionId])
@@ -250,6 +256,7 @@ model Servicio {
 
   profesionales ProfesionalServicio[]
   citas         Cita[]
+  fotos         ServicioFoto[]
 
   @@unique([organizacionId, codigo])
   @@index([organizacionId])
@@ -259,6 +266,36 @@ model Servicio {
 // =====================================================
 // PROFESIONALES <-> SERVICIOS
 // =====================================================
+
+// Fotos de un servicio (máximo 3, en orden). La imagen vive en documentos (SeaweedFS).
+model ServicioFoto {
+  id          Int @id @default(autoincrement())
+  servicioId  Int @map("servicio_id")
+  documentoId Int @map("documento_id")
+  orden       Int @default(0)
+
+  servicio  Servicio  @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+  documento Documento @relation(fields: [documentoId], references: [id])
+
+  @@unique([servicioId, documentoId])
+  @@index([servicioId])
+  @@map("servicio_fotos")
+}
+
+// Fotos de una instalación o de un profesional (máximo 3, en orden).
+model RecursoFoto {
+  id            Int @id @default(autoincrement())
+  profesionalId Int @map("profesional_id")
+  documentoId   Int @map("documento_id")
+  orden         Int @default(0)
+
+  profesional Profesional @relation(fields: [profesionalId], references: [id], onDelete: Cascade)
+  documento   Documento   @relation(fields: [documentoId], references: [id])
+
+  @@unique([profesionalId, documentoId])
+  @@index([profesionalId])
+  @@map("recurso_fotos")
+}
 
 model ProfesionalServicio {
   id Int @id @default(autoincrement())
@@ -300,6 +337,25 @@ model HorarioProfesional {
   @@unique([profesionalId, diaSemana, horaInicio, horaFin])
   @@index([profesionalId, diaSemana])
   @@map("horarios_profesional")
+}
+
+// Cuándo abre y cierra la empresa. Un profesional o instalación sin horario propio usa este,
+// y el horario propio debe caber dentro de él.
+model HorarioOrganizacion {
+  id Int @id @default(autoincrement())
+
+  organizacionId Int @map("organizacion_id")
+
+  diaSemana DiaSemana @map("dia_semana")
+
+  horaInicio DateTime @map("hora_inicio") @db.Time(0)
+  horaFin    DateTime @map("hora_fin") @db.Time(0)
+
+  organizacion Organizacion @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+
+  @@unique([organizacionId, diaSemana, horaInicio, horaFin])
+  @@index([organizacionId])
+  @@map("horarios_organizacion")
 }
 
 // =====================================================
@@ -793,12 +849,14 @@ model CategoriaEmpresa {
   id      Int  @id @default(autoincrement())
   padreId Int? @map("padre_id")
 
-  codigo      String      @unique @db.VarChar(60)
-  nombre      String      @db.VarChar(100)
-  descripcion String?     @db.VarChar(250)
-  icono       String?     @db.VarChar(60)
-  reserva     TipoReserva @default(PERSONAS)
-  orden       Int         @default(0)
+  codigo         String      @unique @db.VarChar(60)
+  nombre         String      @db.VarChar(100)
+  descripcion    String?     @db.VarChar(250)
+  icono          String?     @db.VarChar(60)
+  reserva        TipoReserva @default(PERSONAS)
+  orden          Int         @default(0)
+  // Cómo llama el negocio a quienes reservan (Pacientes). null = el de su categoría general o "Clientes".
+  terminoCliente String?     @map("termino_cliente") @db.VarChar(40)
 
   activo Boolean @default(true)
 
@@ -809,6 +867,7 @@ model CategoriaEmpresa {
   subcategorias  CategoriaEmpresa[] @relation("CategoriaSubcategorias")
   cargos         Cargo[]
   organizaciones Organizacion[]
+  planes         Plan[]
 
   @@index([padreId])
   @@map("categorias_empresa")
@@ -867,6 +926,8 @@ model CatalogoItem {
   nombre      String  @db.VarChar(150)
   descripcion String? @db.VarChar(250)
   orden       Int     @default(0)
+  // Color de la etiqueta (#RRGGBB), p. ej. el de cada estado de cita en la agenda.
+  color       String? @db.VarChar(7)
 
   activo Boolean @default(true)
 
@@ -875,9 +936,11 @@ model CatalogoItem {
 
   catalogo Catalogo @relation(fields: [catalogoId], references: [id])
 
-  documentos       Documento[]  @relation("DocumentoTipo")
-  mediosPorEntidad MedioCobro[] @relation("MedioCobroEntidad")
-  mediosPorTipoCta MedioCobro[] @relation("MedioCobroTipoCuenta")
+  documentos        Documento[]   @relation("DocumentoTipo")
+  profesionalesTipo Profesional[] @relation("ProfesionalTipo")
+  pantallasTipo     Pantalla[]    @relation("PantallaTipoRecurso")
+  mediosPorEntidad  MedioCobro[]  @relation("MedioCobroEntidad")
+  mediosPorTipoCta  MedioCobro[]  @relation("MedioCobroTipoCuenta")
 
   @@unique([catalogoId, codigo])
   @@index([catalogoId])
@@ -911,8 +974,10 @@ model Documento {
   tipo         CatalogoItem  @relation("DocumentoTipo", fields: [tipoId], references: [id])
   subidoPor    Usuario?      @relation(fields: [subidoPorId], references: [id])
 
-  mediosCobro  MedioCobro[]
-  comprobantes ComprobantePago[]
+  mediosCobro   MedioCobro[]
+  comprobantes  ComprobantePago[]
+  fotosServicio ServicioFoto[]
+  fotosRecurso  RecursoFoto[]
 
   @@index([organizacionId])
   @@index([tipoId])
@@ -977,6 +1042,10 @@ model Plan {
   moneda       String       @default("USD") @db.VarChar(3)
   periodicidad Periodicidad @default(MENSUAL)
 
+  // Tipo de negocio al que se ofrece (Salud, o solo Odontología). null = a todos los negocios.
+  // Una empresa ve los de su subcategoría, los de su categoría general y los de todos.
+  categoriaId Int? @map("categoria_id")
+
   orden  Int     @default(0)
   // false = ya no se ofrece; las suscripciones existentes siguen vigentes
   activo Boolean @default(true)
@@ -985,7 +1054,9 @@ model Plan {
 
   modulos       PlanModulo[]
   suscripciones Suscripcion[]
+  categoria     CategoriaEmpresa? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
 
+  @@index([categoriaId])
   @@map("planes")
 }
 
@@ -1056,11 +1127,18 @@ model Pantalla {
   activo Boolean @default(true)
 
   // true = solo la ve el super admin (administración de la plataforma), aunque el módulo sea base
-  soloPlataforma Boolean @default(false) @map("solo_plataforma")
+  soloPlataforma   Boolean @default(false) @map("solo_plataforma")
   // true = la ve todo usuario sin que su rol la tenga asignada (p. ej. Mi perfil)
-  paraTodos      Boolean @default(false) @map("para_todos")
+  paraTodos        Boolean @default(false) @map("para_todos")
+  // true = su nombre en el menú es cómo el negocio llama a sus clientes (Pacientes en una clínica)
+  nombrePorNegocio Boolean @default(false) @map("nombre_por_negocio")
 
-  modulo Modulo @relation(fields: [moduloId], references: [id])
+  // item de TIPOS_RECURSO: solo se muestra a empresas cuyo negocio reserva ese tipo
+  // (Profesionales -> PERSONA, Instalaciones -> ESPACIO). null = todas.
+  tipoRecursoId Int? @map("tipo_recurso_id")
+
+  modulo      Modulo        @relation(fields: [moduloId], references: [id])
+  tipoRecurso CatalogoItem? @relation("PantallaTipoRecurso", fields: [tipoRecursoId], references: [id])
 
   // los permisos de una pantalla son sus botones y acciones
   permisos Permiso[]

@@ -1,5 +1,4 @@
 const AppError = require('../../errors/AppError');
-const MSG = require('../../config/mensajes');
 const { HTTP } = require('../../config/constantes');
 const { validarIdPositivo } = require('../../utils/validaciones');
 

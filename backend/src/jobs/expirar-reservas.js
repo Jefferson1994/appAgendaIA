@@ -4,12 +4,10 @@
 // =====================================================
 
 const prisma = require('../shared/prisma');
+const { INTERVALO_REVISION_RESERVAS_MS } = require('../config/constantes');
 const {
   expirarReservasVencidas: expirarEnBaseDeDatos
 } = require('../shared/reservas');
-
-// Revisar cada 60 segundos.
-const INTERVALO_REVISION_MS = 60 * 1000;
 
 // Evitar ejecutar dos limpiezas simultaneamente
 // dentro del mismo proceso Node.js.
@@ -84,7 +82,7 @@ function iniciarLimpiezaReservas() {
 
     void expirarReservasVencidas();
 
-  }, INTERVALO_REVISION_MS);
+  }, INTERVALO_REVISION_RESERVAS_MS);
 
   return intervaloActivo;
 

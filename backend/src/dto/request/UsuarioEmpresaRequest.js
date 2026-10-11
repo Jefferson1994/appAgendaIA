@@ -2,7 +2,6 @@ const AppError = require('../../errors/AppError');
 const MSG = require('../../config/mensajes');
 const { HTTP, LONGITUD_MAX } = require('../../config/constantes');
 const {
-  estaVacio,
   validarIdPositivo,
   validarIdOpcional,
   validarTexto,
@@ -45,8 +44,7 @@ function validarGuardarUsuario(body = {}) {
     ...persona,
     esAdministrador,
     rolId,
-    ...validarPersonalEmpresa(body),
-    profesionalId: estaVacio(body.profesionalId) ? null : validarIdPositivo(body.profesionalId, 'profesionalId')
+    ...validarPersonalEmpresa(body)
   };
 }
 

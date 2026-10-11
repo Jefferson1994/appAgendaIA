@@ -1,14 +1,19 @@
 const prisma = require('../shared/prisma');
 
 const POR_ORDEN = [{ orden: 'asc' }, { nombre: 'asc' }];
-const CON_MODULOS = { modulos: { include: { modulo: true } } };
+const CON_MODULOS = { modulos: { include: { modulo: true } }, categoria: true };
 
 function listar(db = prisma) {
   return db.plan.findMany({ orderBy: POR_ORDEN, include: CON_MODULOS });
 }
 
-function listarActivos(db = prisma) {
-  return db.plan.findMany({ where: { activo: true }, orderBy: POR_ORDEN, include: CON_MODULOS });
+// Planes activos que se ofrecen a un negocio: los de sus categorías y los que son para todos.
+function listarActivosPara(categoriaIds, db = prisma) {
+  return db.plan.findMany({
+    where: { activo: true, OR: [{ categoriaId: null }, { categoriaId: { in: categoriaIds } }] },
+    orderBy: POR_ORDEN,
+    include: CON_MODULOS
+  });
 }
 
 function buscarPorId(id, db = prisma) {
@@ -35,4 +40,4 @@ async function reemplazarModulos(planId, moduloIds, db = prisma) {
   }
 }
 
-module.exports = { listar, listarActivos, buscarPorId, contar, crear, actualizar, reemplazarModulos };
+module.exports = { listar, listarActivosPara, buscarPorId, contar, crear, actualizar, reemplazarModulos };

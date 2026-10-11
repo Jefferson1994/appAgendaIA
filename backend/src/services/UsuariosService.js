@@ -9,7 +9,6 @@ const { ROL_ADMIN_EMPRESA, esPlantillaAdmin } = require('./RolesService');
 const UsuariosRepository = require('../repositories/UsuariosRepository');
 const PersonasRepository = require('../repositories/PersonasRepository');
 const RolesRepository = require('../repositories/RolesRepository');
-const ProfesionalesRepository = require('../repositories/ProfesionalesRepository');
 const RefreshTokensRepository = require('../repositories/RefreshTokensRepository');
 const OrganizacionesRepository = require('../repositories/OrganizacionesRepository');
 const ProfesionalesService = require('./ProfesionalesService');
@@ -60,20 +59,18 @@ function traducirErrorUnico(error) {
 // El super admin recibe además las empresas; hasta que elige una, la lista de usuarios va vacía.
 async function consultar(actor, { organizacionId } = {}) {
   const empresas = esPlataforma(actor) ? await OrganizacionesRepository.listarActivas() : null;
-  if (empresas && !organizacionId) return { empresas, usuarios: [], roles: [], profesionales: [] };
+  if (empresas && !organizacionId) return { empresas, usuarios: [], roles: [] };
 
   const empresa = await empresaDe(actor, organizacionId);
-  const [usuarios, roles, profesionales, perfil] = await Promise.all([
+  const [usuarios, roles, perfil] = await Promise.all([
     UsuariosRepository.listarPorOrganizacion(empresa.id),
     RolesRepository.listarVisibles(empresa.id),
-    ProfesionalesRepository.listarActivosDeOrganizacion(empresa.id),
     CategoriasService.perfilDeCategoria(empresa.categoriaId)
   ]);
   return {
     empresas,
     usuarios,
     roles: roles.filter((rol) => !esPlantillaAdmin(rol)),
-    profesionales,
     reserva: perfil.reserva,
     cargos: perfil.cargos
   };
@@ -93,14 +90,11 @@ async function resolverPersonal(empresa, datos, { profesionalActualId = null, ca
 }
 
 // Tipo de acceso, rol y profesional del usuario según lo elegido en el formulario.
-// El profesional es el que ya tenía (al editar), uno existente elegido, o uno nuevo si `esProfesional`.
+// El profesional es el que ya tenía (al editar) o uno nuevo si `esProfesional`.
 // Un rol de alcance PROPIO (ej. Doctor) necesita profesional: es el dueño de las citas que verá.
 async function resolverAcceso(organizacionId, datos, profesionalActualId = null) {
   const { esAdministrador: comoAdministrador, rolId, esProfesional } = datos;
-  if (datos.profesionalId && !(await ProfesionalesRepository.buscarDeOrganizacion(datos.profesionalId, organizacionId))) {
-    throw invalido(MSG.PROFESIONAL_NO_ENCONTRADO_EMPRESA);
-  }
-  const profesionalId = datos.profesionalId || profesionalActualId;
+  const profesionalId = profesionalActualId;
   const crearProfesional = Boolean(esProfesional) && !profesionalId;
 
   if (comoAdministrador) {

@@ -3,7 +3,7 @@ const AppError = require('../errors/AppError');
 const MSG = require('../config/mensajes');
 const { HTTP, TRANSACCION_OPCIONES } = require('../config/constantes');
 const CobroSuscripcionesService = require('./CobroSuscripcionesService');
-const { esVendible } = require('./PlanesService');
+const { esVendible, categoriasDeEmpresa, seOfreceA } = require('./PlanesService');
 const ModulosRepository = require('../repositories/ModulosRepository');
 const PlanesRepository = require('../repositories/PlanesRepository');
 const SuscripcionesRepository = require('../repositories/SuscripcionesRepository');
@@ -24,11 +24,13 @@ const modulosDelPlan = (suscripcion) =>
 async function consultar(usuario) {
   const organizacionId = empresaDe(usuario);
   const ahora = new Date();
+  // Solo los planes de su tipo de negocio (y los que son para todos).
+  const categoriaIds = await categoriasDeEmpresa(usuario.organizacion && usuario.organizacion.categoriaId);
 
   const [vigente, historial, planes, contratados, modulos] = await Promise.all([
     SuscripcionesRepository.buscarVigente(organizacionId, ahora),
     SuscripcionesRepository.listarPorOrganizacion(organizacionId),
-    PlanesRepository.listarActivos(),
+    PlanesRepository.listarActivosPara(categoriaIds),
     OrganizacionModulosRepository.listarVigentes(organizacionId, ahora),
     ModulosRepository.listar()
   ]);
@@ -48,7 +50,9 @@ async function consultar(usuario) {
 async function cambiarPlan(usuario, { planId }) {
   const organizacionId = empresaDe(usuario);
   const plan = await PlanesRepository.buscarPorId(planId);
-  if (!plan || !plan.activo) throw conflicto(MSG.PLAN_NO_DISPONIBLE);
+  const categoriaIds = await categoriasDeEmpresa(usuario.organizacion && usuario.organizacion.categoriaId);
+  // Un plan de otro tipo de negocio no se puede contratar aunque se conozca su id.
+  if (!plan || !plan.activo || !seOfreceA(plan, categoriaIds)) throw conflicto(MSG.PLAN_NO_DISPONIBLE);
 
   const ahora = new Date();
   const vigente = await SuscripcionesRepository.buscarVigente(organizacionId, ahora);

@@ -15,6 +15,12 @@ router.post(
   asyncHandler(CatalogoServiciosController.consultar)
 );
 router.post(
+  Paths.OPCIONES,
+  autenticar,
+  exigirPermiso(PERMISOS.SERVICIOS_VER),
+  asyncHandler(CatalogoServiciosController.opciones)
+);
+router.post(
   Paths.GUARDAR,
   autenticar,
   exigirPermiso(PERMISOS.SERVICIOS_GESTIONAR),

@@ -78,15 +78,11 @@ async function solicitarPago({ canalId, citaId }) {
     await BloqueosRepository.bloquearProfesional(tx, canal.profesionalId);
     await expirarReservasVencidas(tx, canal.profesionalId);
 
-    const cita = citaId
-      ? await CitasRepository.buscarParaPago(
-          { id: citaId, organizacionId: canal.organizacionId, profesionalId: canal.profesionalId },
-          tx
-        )
-      : await CitasRepository.buscarUltimaPorTelefono(
-          { organizacionId: canal.organizacionId, profesionalId: canal.profesionalId, telefono },
-          tx
-        );
+    // cita_id es obligatorio (SolicitudPagoRequest): siempre se paga una cita concreta.
+    const cita = await CitasRepository.buscarParaPago(
+      { id: citaId, organizacionId: canal.organizacionId, profesionalId: canal.profesionalId },
+      tx
+    );
 
     if (!cita) {
       throw new AppError(MSG.CITA_NO_ENCONTRADA, HTTP.NO_ENCONTRADO);

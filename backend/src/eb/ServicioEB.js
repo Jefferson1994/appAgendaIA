@@ -1,7 +1,9 @@
 const { nombreCompleto } = require('../utils/texto');
 
+// `rutaFoto(documentoId)`: solo en el contexto del canal; agrega `fotos` con la URL de cada una
+// (el bot las descarga para mandarlas por WhatsApp). Sin ella, el campo no viaja.
 class ServicioEB {
-  constructor(relacion, profesional) {
+  constructor(relacion, profesional, rutaFoto = null) {
     const servicio = relacion.servicio;
 
     this.id = servicio.id;
@@ -13,6 +15,7 @@ class ServicioEB {
     this.requiere_pago_previo = servicio.requierePagoPrevio;
     this.porcentaje_anticipo = servicio.porcentajeAnticipo ? Number(servicio.porcentajeAnticipo) : null;
     this.profesional = { id: profesional.id, nombre: nombreCompleto(profesional) };
+    if (rutaFoto) this.fotos = (servicio.fotos || []).map((foto) => rutaFoto(foto.documentoId));
   }
 }
 

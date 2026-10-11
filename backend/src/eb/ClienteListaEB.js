@@ -14,6 +14,11 @@ class ClienteListaEB {
     this.TotalCitas = resumen.totalCitas;
     this.UltimaCita = aFecha(resumen.ultimaCita, zona);
     this.ProximaCita = aFecha(resumen.proximaCita, zona);
+    // Con quiénes reservó (profesionales o instalaciones).
+    this.Profesionales = resumen.profesionales.map((profesional) => ({
+      Id: profesional.id,
+      Nombre: [profesional.nombre, profesional.apellido].filter(Boolean).join(' ')
+    }));
   }
 }
 

@@ -1,12 +1,20 @@
 const AppError = require('../errors/AppError');
 const MSG = require('../config/mensajes');
-const { HTTP, TIPOS_RESERVA } = require('../config/constantes');
+const { HTTP, TIPOS_RESERVA, TIPOS_RECURSO } = require('../config/constantes');
 const CategoriasEmpresaRepository = require('../repositories/CategoriasEmpresaRepository');
 const CargosRepository = require('../repositories/CargosRepository');
 
 const ERROR_UNICO_PRISMA = 'P2002';
 
 const invalido = (mensaje) => new AppError(mensaje, HTTP.PETICION_INVALIDA);
+
+// Tipos de recurso (TIPOS_RECURSO) que usa cada negocio según lo que reserva.
+const TIPOS_POR_RESERVA = {
+  [TIPOS_RESERVA.PERSONAS]: [TIPOS_RECURSO.PERSONA],
+  [TIPOS_RESERVA.ESPACIOS]: [TIPOS_RECURSO.ESPACIO],
+  [TIPOS_RESERVA.AMBOS]: [TIPOS_RECURSO.PERSONA, TIPOS_RECURSO.ESPACIO]
+};
+const tiposRecursoDe = (reserva) => TIPOS_POR_RESERVA[reserva] || [TIPOS_RECURSO.PERSONA];
 
 // En el negocio se reservan personas (profesionales con agenda propia).
 const reservaPersonas = (reserva) => reserva === TIPOS_RESERVA.PERSONAS || reserva === TIPOS_RESERVA.AMBOS;
@@ -84,16 +92,21 @@ function catalogoPublico() {
   return CategoriasEmpresaRepository.listarActivasConCargos();
 }
 
-// Qué se reserva en una empresa y qué cargos puede tener su personal (los de su subcategoría
+// Qué se reserva en una empresa, qué cargos puede tener su personal y cómo llama a sus clientes (los de su subcategoría
 // y los de su categoría general). Empresas anteriores a las categorías: reservan personas, sin cargos.
 async function perfilDeCategoria(categoriaId) {
-  if (!categoriaId) return { reserva: TIPOS_RESERVA.PERSONAS, cargos: [] };
+  if (!categoriaId) return { reserva: TIPOS_RESERVA.PERSONAS, cargos: [], terminoCliente: null };
 
   const categoria = await CategoriasEmpresaRepository.buscarPorId(categoriaId);
-  if (!categoria) return { reserva: TIPOS_RESERVA.PERSONAS, cargos: [] };
+  if (!categoria) return { reserva: TIPOS_RESERVA.PERSONAS, cargos: [], terminoCliente: null };
 
   const ids = [categoria.id, categoria.padreId].filter(Boolean);
-  return { reserva: categoria.reserva, cargos: await CargosRepository.listarActivosDeCategorias(ids) };
+  return {
+    reserva: categoria.reserva,
+    cargos: await CargosRepository.listarActivosDeCategorias(ids),
+    // La subcategoría puede tener su propio término; si no, el de su categoría general.
+    terminoCliente: categoria.terminoCliente || (categoria.padre && categoria.padre.terminoCliente) || null
+  };
 }
 
 // El registro solo acepta una subcategoría activa cuya categoría general también esté activa.
@@ -113,6 +126,7 @@ function exigirCargoDelPerfil(perfil, cargoId) {
 }
 
 module.exports = {
+  tiposRecursoDe,
   reservaPersonas,
   consultar,
   guardarCategoria,

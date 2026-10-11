@@ -2,12 +2,11 @@ const { TipoIdentificacion } = require('@prisma/client');
 const AppError = require('../../errors/AppError');
 const MSG = require('../../config/mensajes');
 const { HTTP, AUTH, LONGITUD_MAX } = require('../../config/constantes');
-const { validarTexto } = require('../../utils/validaciones');
+const { validarTexto, esCedulaValida } = require('../../utils/validaciones');
 
 const CLAVE_MAX = 200;
 const IDENTIFICACION_MAX = 20;
 const FORMATO_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const FORMATO_CEDULA = /^\d{10}$/;
 const TIPOS_IDENTIFICACION = Object.values(TipoIdentificacion);
 
 const vacio = (valor) => valor === null || valor === undefined || String(valor).trim() === '';
@@ -40,8 +39,8 @@ function validarIdentificacion(tipo, identificacion) {
   }
 
   const numero = validarTexto(identificacion, 'identificacion', IDENTIFICACION_MAX);
-  if (tipoIdentificacion === TipoIdentificacion.CEDULA && !FORMATO_CEDULA.test(numero)) {
-    throw new AppError(MSG.DATO_INVALIDO('identificacion'), HTTP.PETICION_INVALIDA);
+  if (tipoIdentificacion === TipoIdentificacion.CEDULA && !esCedulaValida(numero)) {
+    throw new AppError(MSG.CEDULA_INVALIDA, HTTP.PETICION_INVALIDA);
   }
 
   return { tipoIdentificacion, identificacion: numero };

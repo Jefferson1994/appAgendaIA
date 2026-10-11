@@ -8,5 +8,6 @@ const router = express.Router();
 router.get(Paths.POR_CANAL, asyncHandler(ContextoController.resolverPorCanal));
 router.get(Paths.MEDIOS_COBRO, asyncHandler(ContextoController.mediosCobro));
 router.get(Paths.QR_MEDIO_COBRO, asyncHandler(ContextoController.qrMedioCobro));
+router.get(Paths.DOCUMENTO, asyncHandler(ContextoController.documento));
 
 module.exports = router;

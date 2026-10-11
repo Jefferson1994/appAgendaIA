@@ -15,6 +15,7 @@ class ServicioCatalogoEB {
     this.RequierePagoPrevio = servicio.requierePagoPrevio;
     this.PorcentajeAnticipo = aNumero(servicio.porcentajeAnticipo);
     this.Activo = servicio.activo;
+    this.FotoIds = (servicio.fotos || []).map((foto) => foto.documentoId);
 
     this.Profesionales = servicio.profesionales.map((asignacion) => ({
       Id: asignacion.profesional.id,

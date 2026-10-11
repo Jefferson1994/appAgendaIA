@@ -29,6 +29,8 @@ function validarGuardarCategoria(body = {}) {
     descripcion: validarTextoOpcional(body.descripcion, 'descripcion', L.DESCRIPCION),
     icono: estaVacio(body.icono) ? null : validarFormato(body.icono, 'icono', FORMATOS_ACCESO.ICONO, L.ICONO),
     reserva: validarOpcion(body.reserva, 'reserva', OPCIONES_RESERVA, TIPOS_RESERVA.PERSONAS),
+    // "Pacientes", "Socios"... vacío = el de la categoría general o "Clientes".
+    terminoCliente: validarTextoOpcional(body.terminoCliente, 'terminoCliente', L.TERMINO_CLIENTE),
     orden: validarEnteroEnRango(body.orden, 'orden', RANGO_ORDEN)
   };
 }

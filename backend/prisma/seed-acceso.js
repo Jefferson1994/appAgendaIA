@@ -13,7 +13,8 @@ const PantallasRepository = require('../src/repositories/PantallasRepository');
 const OrganizacionModulosRepository = require('../src/repositories/OrganizacionModulosRepository');
 const AccionesRepository = require('../src/repositories/AccionesRepository');
 const PlanesRepository = require('../src/repositories/PlanesRepository');
-const { TIPOS_RESERVA, CATALOGOS, TIPOS_DOCUMENTO } = require('../src/config/constantes');
+const ConfiguracionModulosService = require('../src/services/ConfiguracionModulosService');
+const { TIPOS_RESERVA, CATALOGOS, TIPOS_DOCUMENTO, TIPOS_RECURSO } = require('../src/config/constantes');
 // =====================================================
 // DATOS INICIALES (despues de cargarlos, manda la base)
 // =====================================================
@@ -26,8 +27,11 @@ const CATALOGO_PERMISOS = [
   { codigo: PERMISOS.SERVICIOS_GESTIONAR, categoria: 'servicios', descripcion: 'Crear y editar servicios' },
   { codigo: PERMISOS.PROFESIONALES_VER, categoria: 'profesionales', descripcion: 'Ver profesionales y recursos' },
   { codigo: PERMISOS.PROFESIONALES_GESTIONAR, categoria: 'profesionales', descripcion: 'Crear y editar profesionales y recursos' },
+  { codigo: PERMISOS.INSTALACIONES_VER, categoria: 'instalaciones', descripcion: 'Ver las instalaciones (canchas, mesas, salas)' },
+  { codigo: PERMISOS.INSTALACIONES_GESTIONAR, categoria: 'instalaciones', descripcion: 'Crear y editar instalaciones, sus horarios y fotos' },
+  { codigo: PERMISOS.EMPRESA_GESTIONAR, categoria: 'empresa', descripcion: 'Editar los datos de la empresa y su horario de atención' },
   { codigo: PERMISOS.PAGOS_VER, categoria: 'pagos', descripcion: 'Ver los pagos' },
-  { codigo: PERMISOS.USUARIOS_GESTIONAR, categoria: 'usuarios', descripcion: 'Crear y administrar cuentas de la organizacion' },
+  { codigo: PERMISOS.USUARIOS_GESTIONAR, categoria: 'usuarios', descripcion: 'Ver la pantalla de usuarios de la organización' },
   { codigo: PERMISOS.ROLES_GESTIONAR, categoria: 'roles', descripcion: 'Crear y editar roles de la organizacion' },
   {
     codigo: PERMISOS.MODULOS_GESTIONAR,
@@ -116,14 +120,22 @@ const CATALOGO_ACCIONES = [
   { codigo: 'EDITAR', nombre: 'Editar', icono: 'pencil', orden: 3, requiereSeleccion: true },
   { codigo: 'ELIMINAR', nombre: 'Eliminar', icono: 'trash-2', orden: 4, requiereSeleccion: true },
   { codigo: 'CAMBIAR_ESTADO', nombre: 'Activar/Desactivar', icono: 'power', orden: 5, requiereSeleccion: true },
-  { codigo: 'EXPORTAR', nombre: 'Exportar', icono: 'download', orden: 6, requiereSeleccion: false }
+  { codigo: 'EXPORTAR', nombre: 'Exportar', icono: 'download', orden: 6, requiereSeleccion: false },
+  { codigo: 'RESTABLECER_CLAVE', nombre: 'Restablecer clave', icono: 'key-round', orden: 7, requiereSeleccion: true }
 ];
+
+// Botones (acciones del catálogo) de las pantallas que el código ya usa. Cada uno crea su
+// permiso <ruta>.<accion> (p. ej. usuarios.crear), que el backend exige en su endpoint.
+// Después se pueden agregar más desde Configuración de módulos.
+const BOTONES_POR_PANTALLA = {
+  CONFIGURACION_USUARIOS: ['CREAR', 'EDITAR', 'CAMBIAR_ESTADO', 'RESTABLECER_CLAVE']
+};
 
 // Modulos de la plataforma. Las pantallas y sus botones se crean desde el front.
 const MODULOS_INICIALES = [
   { codigo: 'INICIO', nombre: 'Inicio', icono: 'home', orden: 1, esBase: true },
   { codigo: 'AGENDA', nombre: 'Agenda', icono: 'calendar', orden: 2, esBase: false },
-  { codigo: 'PACIENTES', nombre: 'Pacientes', icono: 'users', orden: 3, esBase: false },
+  { codigo: 'PACIENTES', nombre: 'Clientes', icono: 'users', orden: 3, esBase: false },
   { codigo: 'CONSULTAS', nombre: 'Consultas', icono: 'clipboard', orden: 4, esBase: false },
   { codigo: 'MENSAJES', nombre: 'Mensajes', icono: 'message-circle', orden: 5, esBase: false },
   { codigo: 'HISTORIA_CLINICA', nombre: 'Historia clínica', icono: 'file-text', orden: 6, esBase: false },
@@ -148,7 +160,9 @@ const PANTALLAS_INICIALES = [
   {
     modulo: 'PACIENTES',
     codigo: 'PACIENTES_LISTA',
-    nombre: 'Pacientes',
+    // En el menú toma el término del negocio: Pacientes en salud, Clientes en el resto.
+    nombre: 'Clientes',
+    nombrePorNegocio: true,
     ruta: '/pacientes',
     icono: 'users',
     permisos: [PERMISOS.CLIENTES_VER]
@@ -248,6 +262,49 @@ const PANTALLAS_INICIALES = [
     permisos: [PERMISOS.COBROS_GESTIONAR]
   },
   {
+    // Servicios de la empresa (precio, duración, pago previo, fotos) y quién los ofrece.
+    modulo: 'CONFIGURACION',
+    codigo: 'CONFIGURACION_SERVICIOS',
+    nombre: 'Servicios',
+    ruta: '/servicios',
+    icono: 'briefcase-business',
+    orden: 9,
+    permisos: [PERMISOS.SERVICIOS_VER, PERMISOS.SERVICIOS_GESTIONAR]
+  },
+  {
+    // Personas que atienden (nacen en Usuarios): su descripción, horarios y fotos.
+    // Solo para negocios que reservan personas.
+    modulo: 'CONFIGURACION',
+    codigo: 'CONFIGURACION_PROFESIONALES',
+    nombre: 'Profesionales',
+    ruta: '/profesionales',
+    icono: 'contact',
+    orden: 10,
+    tipoRecurso: TIPOS_RECURSO.PERSONA,
+    permisos: [PERMISOS.PROFESIONALES_VER, PERMISOS.PROFESIONALES_GESTIONAR]
+  },
+  {
+    // Canchas, mesas, salas: sus horarios y fotos. Solo para negocios que reservan espacios.
+    modulo: 'CONFIGURACION',
+    codigo: 'CONFIGURACION_INSTALACIONES',
+    nombre: 'Instalaciones',
+    ruta: '/instalaciones',
+    icono: 'warehouse',
+    orden: 11,
+    tipoRecurso: TIPOS_RECURSO.ESPACIO,
+    permisos: [PERMISOS.INSTALACIONES_VER, PERMISOS.INSTALACIONES_GESTIONAR]
+  },
+  {
+    // Datos de la empresa; por ahora, cuándo abre y cierra.
+    modulo: 'CONFIGURACION',
+    codigo: 'CONFIGURACION_EMPRESA',
+    nombre: 'Mi empresa',
+    ruta: '/mi-empresa',
+    icono: 'building-2',
+    orden: 9,
+    permisos: [PERMISOS.EMPRESA_GESTIONAR]
+  },
+  {
     // Cada usuario edita sus datos, su correo y su clave; el profesional, sus cuentas.
     modulo: 'CONFIGURACION',
     codigo: 'CONFIGURACION_PERFIL',
@@ -300,12 +357,38 @@ const CATALOGOS_INICIALES = [
     ]
   },
   {
+    // Estados de una cita y su color en la agenda. El código es el del enum EstadoCita.
+    codigo: CATALOGOS.ESTADOS_CITA,
+    nombre: 'Estados de cita',
+    descripcion: 'Nombre y color de cada estado en la agenda',
+    items: [
+      { codigo: 'RESERVA_TEMPORAL', nombre: 'Reservando', color: '#8E8E93' },
+      { codigo: 'PENDIENTE_PAGO', nombre: 'Pendiente de pago', color: '#FFCC00' },
+      { codigo: 'CONFIRMADA', nombre: 'Confirmada', color: '#34C759' },
+      { codigo: 'ATENDIDA', nombre: 'Atendida', color: '#007AFF' },
+      { codigo: 'NO_ASISTIO', nombre: 'No asistió', color: '#AF52DE' },
+      { codigo: 'CANCELADA', nombre: 'Cancelada', color: '#FF3B30' },
+      { codigo: 'EXPIRADA', nombre: 'Expirada', color: '#C7C7CC' }
+    ]
+  },
+  {
+    codigo: CATALOGOS.TIPOS_RECURSO,
+    nombre: 'Tipos de recurso',
+    descripcion: 'Qué se reserva: una persona o una instalación',
+    items: [
+      { codigo: TIPOS_RECURSO.PERSONA, nombre: 'Persona' },
+      { codigo: TIPOS_RECURSO.ESPACIO, nombre: 'Instalación' }
+    ]
+  },
+  {
     codigo: CATALOGOS.TIPOS_DOCUMENTO,
     nombre: 'Tipos de documento',
     descripcion: 'Qué es cada archivo subido (el código lo usa el backend para validar el formato)',
     items: [
       { codigo: TIPOS_DOCUMENTO.QR_COBRO, nombre: 'QR de cobro' },
-      { codigo: TIPOS_DOCUMENTO.COMPROBANTE_PAGO, nombre: 'Comprobante de pago' }
+      { codigo: TIPOS_DOCUMENTO.COMPROBANTE_PAGO, nombre: 'Comprobante de pago' },
+      { codigo: TIPOS_DOCUMENTO.FOTO_SERVICIO, nombre: 'Foto de servicio' },
+      { codigo: TIPOS_DOCUMENTO.FOTO_RECURSO, nombre: 'Foto de profesional o instalación' }
     ]
   }
 ];
@@ -316,7 +399,7 @@ const CATALOGOS_INICIALES = [
 const { PERSONAS, ESPACIOS, AMBOS } = TIPOS_RESERVA;
 const CATEGORIAS_INICIALES = [
   {
-    codigo: 'SALUD', nombre: 'Salud', icono: 'heart-pulse', reserva: PERSONAS, orden: 1,
+    codigo: 'SALUD', nombre: 'Salud', icono: 'heart-pulse', reserva: PERSONAS, orden: 1, terminoCliente: 'Pacientes',
     cargos: ['Recepcionista', 'Asistente', 'Administrador'],
     subcategorias: [
       { codigo: 'SALUD_ODONTOLOGIA', nombre: 'Odontología', icono: 'smile', cargos: ['Odontólogo', 'Ortodoncista', 'Asistente dental'] },
@@ -471,6 +554,21 @@ async function cargarAcciones() {
   }
 }
 
+async function cargarBotonesDePantallas() {
+  console.log('Botones de pantallas');
+  for (const [codigoPantalla, codigosAccion] of Object.entries(BOTONES_POR_PANTALLA)) {
+    const pantalla = await PantallasRepository.buscarPorCodigo(codigoPantalla);
+    if (!pantalla) throw new Error(`La pantalla ${codigoPantalla} no existe`);
+
+    const acciones = await Promise.all(codigosAccion.map((codigo) => AccionesRepository.buscarPorCodigo(codigo)));
+    if (acciones.some((accion) => !accion)) throw new Error(`La pantalla ${codigoPantalla} usa acciones que no existen`);
+
+    // Ignora las acciones que la pantalla ya tiene: se puede correr varias veces.
+    await ConfiguracionModulosService.asignarAcciones({ pantallaId: pantalla.id, accionIds: acciones.map((a) => a.id) });
+    console.log(`   ✓ ${codigoPantalla} (${codigosAccion.join(', ')})`);
+  }
+}
+
 async function retirarPantallas() {
   console.log('Pantallas retiradas');
   for (const codigo of PANTALLAS_RETIRADAS) {
@@ -551,12 +649,16 @@ async function cargarCatalogos() {
 
     let creados = 0;
     for (const [indice, item] of items.entries()) {
-      const { codigo, nombre } = typeof item === 'string' ? { codigo: codigoDe(item), nombre: item } : item;
+      const { codigo, nombre, color = null } = typeof item === 'string' ? { codigo: codigoDe(item), nombre: item } : item;
       const existe = await prisma.catalogoItem.findUnique({
         where: { catalogoId_codigo: { catalogoId: catalogo.id, codigo } }
       });
-      if (existe) continue;
-      await prisma.catalogoItem.create({ data: { catalogoId: catalogo.id, codigo, nombre, orden: indice + 1 } });
+      if (existe) {
+        // Un valor anterior a los colores recibe el suyo; uno que el super admin ya cambió se respeta.
+        if (color && !existe.color) await prisma.catalogoItem.update({ where: { id: existe.id }, data: { color } });
+        continue;
+      }
+      await prisma.catalogoItem.create({ data: { catalogoId: catalogo.id, codigo, nombre, color, orden: indice + 1 } });
       creados += 1;
     }
     console.log(`   ✓ ${datos.codigo} (${creados} valores nuevos)`);
@@ -598,7 +700,7 @@ async function cargarModulos() {
 
 async function cargarPantallas() {
   console.log('4. Pantallas');
-  for (const { modulo: codigoModulo, permisos, ...datos } of PANTALLAS_INICIALES) {
+  for (const { modulo: codigoModulo, permisos, tipoRecurso, ...datos } of PANTALLAS_INICIALES) {
     const existente = await PantallasRepository.buscarPorCodigo(datos.codigo);
     if (existente) {
       console.log(`   = ${datos.codigo} ya existía (no se modifica)`);
@@ -610,7 +712,13 @@ async function cargarPantallas() {
       throw new Error(`La pantalla ${datos.codigo} usa el módulo ${codigoModulo}, que no existe`);
     }
 
-    const pantalla = await PantallasRepository.crear({ ...datos, moduloId: modulo.id });
+    // Pantalla atada a un tipo de recurso (catálogo TIPOS_RECURSO, ya cargado).
+    const tipo = tipoRecurso ? await prisma.catalogoItem.findFirst({
+      where: { codigo: tipoRecurso, catalogo: { codigo: CATALOGOS.TIPOS_RECURSO } }
+    }) : null;
+    if (tipoRecurso && !tipo) throw new Error(`El tipo de recurso ${tipoRecurso} no existe`);
+
+    const pantalla = await PantallasRepository.crear({ ...datos, moduloId: modulo.id, tipoRecursoId: tipo ? tipo.id : null });
     await PermisosRepository.asignarPantalla(permisos, pantalla.id);
     console.log(`   ✓ ${datos.codigo} (${permisos.length} botones)`);
   }
@@ -719,10 +827,11 @@ async function main() {
   await cargarRolesPlantilla();
   await cargarAcciones();
   await cargarModulos();
+  await cargarCatalogos();
   await cargarPantallas();
   await retirarPantallas();
+  await cargarBotonesDePantallas();
   await cargarPlanesEjemplo();
-  await cargarCatalogos();
   await cargarCategorias();
   await cargarPantallasDeRoles();
   await licenciarTodoParaDesarrollo();

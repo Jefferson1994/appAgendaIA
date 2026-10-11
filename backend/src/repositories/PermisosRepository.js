@@ -55,10 +55,6 @@ function listarSinPantalla(db = prisma) {
   return db.permiso.findMany({ where: { pantallaId: null }, orderBy: { codigo: 'asc' } });
 }
 
-function listarPorPantalla(pantallaId, db = prisma) {
-  return db.permiso.findMany({ where: { pantallaId }, orderBy: { codigo: 'asc' }, include: DETALLE_BOTON });
-}
-
 module.exports = {
   listar,
   listarConPantalla,
@@ -70,6 +66,5 @@ module.exports = {
   actualizar,
   eliminar,
   asignarPantalla,
-  listarPorPantalla,
   listarSinPantalla
 };

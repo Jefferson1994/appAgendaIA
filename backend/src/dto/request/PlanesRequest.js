@@ -45,6 +45,8 @@ function validarGuardarPlan(body = {}) {
     moneda: validarMoneda(body.moneda),
     periodicidad: validarPeriodicidad(body.periodicidad),
     orden: validarEnteroEnRango(body.orden, 'orden', RANGO_ORDEN),
+    // Tipo de negocio al que se ofrece; vacío = a todos.
+    categoriaId: validarIdOpcional(body.categoriaId, 'categoriaId'),
     moduloIds: validarListaIds(body.moduloIds, 'moduloIds', { maximo: VENTA.MODULOS_POR_PLAN_MAX })
   };
 }

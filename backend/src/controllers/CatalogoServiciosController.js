@@ -3,6 +3,7 @@ const ConsultaServiciosRequest = require('../dto/request/ConsultaServiciosReques
 const GuardarServicioRequest = require('../dto/request/GuardarServicioRequest');
 const EstadoServicioRequest = require('../dto/request/EstadoServicioRequest');
 const ServicioCatalogoEB = require('../eb/ServicioCatalogoEB');
+const ServiciosOpcionesEB = require('../eb/ServiciosOpcionesEB');
 const MSG = require('../config/mensajes');
 const { HTTP } = require('../config/constantes');
 const { ok } = require('../utils/respuesta');
@@ -34,4 +35,9 @@ async function cambiarEstado(req, res) {
   return ok(res, new ServicioCatalogoEB(servicio), MSG.SERVICIO_ESTADO_OK);
 }
 
-module.exports = { consultar, guardar, cambiarEstado };
+async function opciones(req, res) {
+  const filtros = ConsultaServiciosRequest.validarOpcionesServicios(req.body);
+  return ok(res, new ServiciosOpcionesEB(await CatalogoServiciosService.opciones(req.usuario, filtros)), MSG.SERVICIOS_OPCIONES_OK);
+}
+
+module.exports = { opciones, consultar, guardar, cambiarEstado };

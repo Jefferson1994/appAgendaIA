@@ -1,13 +1,15 @@
 const AppError = require('../../errors/AppError');
 const MSG = require('../../config/mensajes');
 const { HTTP, LONGITUD_MAX, PORCENTAJE_ANTICIPO_COMPLETO } = require('../../config/constantes');
-const { validarTexto, validarIdPositivo, validarBooleano } = require('../../utils/validaciones');
+const { validarTexto, validarIdPositivo, validarIdOpcional, validarBooleano, validarListaIds } = require('../../utils/validaciones');
 
 const DESCRIPCION_MAX = 1000;
 const PRECIO_MAX = 99999999.99;
 const DURACION_MIN = 5;
 const DURACION_MAX = 1440;
 const ASIGNACIONES_MAX = 100;
+// Tope del body: el servicio aplica el máximo real de fotos (SERVICIOS.FOTOS_MAX) con su mensaje.
+const FOTOS_LISTA_MAX = 10;
 
 const vacio = (valor) => valor === null || valor === undefined || String(valor).trim() === '';
 const invalido = (campo) => new AppError(MSG.DATO_INVALIDO(campo), HTTP.PETICION_INVALIDA);
@@ -58,11 +60,13 @@ function validarAsignaciones(lista) {
 }
 
 // POST /servicios/guardar. Con servicioId edita; sin él, crea.
-// La empresa no viaja en el body: sale del usuario autenticado.
+// La empresa sale del usuario autenticado; solo el super admin la elige con organizacionId.
+// `fotoIds`: lista completa de fotos en orden; si no viene, no se cambian.
 function validarGuardarServicio(body = {}) {
   const requierePagoPrevio = validarBooleano(body.requierePagoPrevio, 'requierePagoPrevio', false);
 
   return {
+    organizacionId: validarIdOpcional(body.organizacionId, 'organizacionId'),
     servicioId: vacio(body.servicioId) ? null : validarIdPositivo(body.servicioId, 'servicioId'),
     nombre: validarTexto(body.nombre, 'nombre', LONGITUD_MAX.TEXTO),
     descripcion: vacio(body.descripcion) ? null : validarTexto(body.descripcion, 'descripcion', DESCRIPCION_MAX),
@@ -75,7 +79,10 @@ function validarGuardarServicio(body = {}) {
         ? PORCENTAJE_ANTICIPO_COMPLETO
         : validarNumero(body.porcentajeAnticipo, 'porcentajeAnticipo', { min: 1, max: 100 }),
     profesionales: validarAsignaciones(body.profesionales),
-    todosLosProfesionales: validarBooleano(body.todosLosProfesionales, 'todosLosProfesionales', false)
+    todosLosProfesionales: validarBooleano(body.todosLosProfesionales, 'todosLosProfesionales', false),
+    fotoIds: body.fotoIds === undefined || body.fotoIds === null
+      ? null
+      : validarListaIds(body.fotoIds, 'fotoIds', { maximo: FOTOS_LISTA_MAX })
   };
 }
 

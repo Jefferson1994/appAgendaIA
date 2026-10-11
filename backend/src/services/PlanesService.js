@@ -4,18 +4,36 @@ const MSG = require('../config/mensajes');
 const { HTTP, TRANSACCION_OPCIONES } = require('../config/constantes');
 const ModulosRepository = require('../repositories/ModulosRepository');
 const PlanesRepository = require('../repositories/PlanesRepository');
+const CategoriasEmpresaRepository = require('../repositories/CategoriasEmpresaRepository');
 
 const ERROR_UNICO_PRISMA = 'P2002';
 
 // Módulos que se pueden vender (en un plan o sueltos): activos y que no sean base.
 const esVendible = (modulo) => modulo.activo && !modulo.esBase;
 
-// Planes y todos los módulos no base (también los inactivos, marcados con `activo`),
-// para que la pantalla muestre los inactivos que un plan ya incluye.
+// Planes, todos los módulos no base (también los inactivos, marcados con `activo`, para que
+// la pantalla muestre los inactivos que un plan ya incluye) y los tipos de negocio.
 async function consultar() {
-  const [planes, modulos] = await Promise.all([PlanesRepository.listar(), ModulosRepository.listar()]);
-  return { planes, modulos: modulos.filter((modulo) => !modulo.esBase) };
+  const [planes, modulos, categorias] = await Promise.all([
+    PlanesRepository.listar(),
+    ModulosRepository.listar(),
+    CategoriasEmpresaRepository.listar()
+  ]);
+  return { planes, modulos: modulos.filter((modulo) => !modulo.esBase), categorias };
 }
+
+/**
+ * Categorías (subcategoría y su categoría general) cuyos planes se le ofrecen a una empresa.
+ * Una empresa sin categoría (anterior a las categorías) solo ve los planes para todos.
+ */
+async function categoriasDeEmpresa(categoriaId) {
+  if (!categoriaId) return [];
+  const categoria = await CategoriasEmpresaRepository.buscarPorId(categoriaId);
+  return categoria ? [categoria.id, categoria.padreId].filter(Boolean) : [];
+}
+
+// Un plan se ofrece a la empresa si es para todos o para una de sus categorías.
+const seOfreceA = (plan, categoriaIds) => plan.categoriaId === null || categoriaIds.includes(plan.categoriaId);
 
 // Los módulos nuevos del plan deben ser vendibles. Un módulo que el plan ya tenía puede
 // conservarse aunque se haya desactivado después: no da acceso mientras esté inactivo.
@@ -38,6 +56,9 @@ async function exigirPlan(planId) {
 // Crea o edita un plan y reemplaza su lista de módulos, todo en una transacción.
 async function guardarPlan({ planId, codigo, moduloIds, ...datos }) {
   const actual = planId ? await exigirPlan(planId) : null;
+  if (datos.categoriaId && !(await CategoriasEmpresaRepository.buscarPorId(datos.categoriaId))) {
+    throw new AppError(MSG.CATEGORIA_NO_ENCONTRADA, HTTP.NO_ENCONTRADO);
+  }
   const yaIncluidos = new Set(actual ? actual.modulos.map((planModulo) => planModulo.moduloId) : []);
   await exigirModulosValidos(moduloIds, yaIncluidos);
 
@@ -75,4 +96,12 @@ async function guardarPrecioModulo({ moduloId, ...precio }) {
   return ModulosRepository.actualizar(moduloId, precio);
 }
 
-module.exports = { esVendible, consultar, guardarPlan, cambiarEstadoPlan, guardarPrecioModulo };
+module.exports = {
+  esVendible,
+  categoriasDeEmpresa,
+  seOfreceA,
+  consultar,
+  guardarPlan,
+  cambiarEstadoPlan,
+  guardarPrecioModulo
+};

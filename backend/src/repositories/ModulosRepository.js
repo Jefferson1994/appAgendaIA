@@ -49,7 +49,10 @@ function listarActivosConPantallas(db = prisma) {
       pantallas: {
         where: { activo: true },
         orderBy: POR_ORDEN,
-        include: { permisos: { orderBy: { codigo: 'asc' }, include: { accion: true } } }
+        include: {
+          permisos: { orderBy: { codigo: 'asc' }, include: { accion: true } },
+          tipoRecurso: { select: { codigo: true } }
+        }
       }
     }
   });

@@ -31,17 +31,18 @@ const esPermisoDeEmpresa = (permiso) => !PERMISOS_PLATAFORMA.has(permiso.codigo)
 // Pantallas (con sus botones) y permisos generales que se pueden dar a un rol:
 // solo los de los módulos que la empresa tiene contratados y nunca los de plataforma.
 async function catalogo(usuario) {
-  const [permitidos, modulos, sinPantalla] = await Promise.all([
+  const [permitidos, modulos, sinPantalla, tipos] = await Promise.all([
     AccesoService.modulosPermitidos(usuario),
     ModulosRepository.listarActivosConPantallas(),
-    PermisosRepository.listarSinPantalla()
+    PermisosRepository.listarSinPantalla(),
+    AccesoService.tiposRecursoPermitidos(usuario)
   ]);
 
   const pantallas = modulos
     .filter((modulo) => permitidos.has(modulo.id))
     .flatMap((modulo) =>
       modulo.pantallas
-        .filter((pantalla) => !pantalla.soloPlataforma)
+        .filter((pantalla) => !pantalla.soloPlataforma && AccesoService.aplicaAlNegocio(pantalla, tipos))
         .map((pantalla) => ({ ...pantalla, modulo, permisos: pantalla.permisos.filter(esPermisoDeEmpresa) }))
     );
 

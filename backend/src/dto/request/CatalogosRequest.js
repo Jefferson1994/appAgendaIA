@@ -9,6 +9,9 @@ const {
   validarBooleano
 } = require('../../utils/validaciones');
 
+// Color de la etiqueta: #RRGGBB.
+const FORMATO_COLOR = /^#[0-9a-fA-F]{6}$/;
+
 const RANGO_ORDEN = { min: ORDEN_ACCESO.MIN, max: ORDEN_ACCESO.MAX, defecto: ORDEN_ACCESO.MIN };
 const L = LONGITUD_CATALOGOS;
 
@@ -21,7 +24,10 @@ function validarGuardarItem(body = {}) {
     codigo: itemId ? null : validarFormato(body.codigo, 'codigo', FORMATOS_ACCESO.CODIGO, L.CODIGO),
     nombre: validarTexto(body.nombre, 'nombre', L.NOMBRE),
     descripcion: validarTextoOpcional(body.descripcion, 'descripcion', L.DESCRIPCION),
-    orden: validarEnteroEnRango(body.orden, 'orden', RANGO_ORDEN)
+    orden: validarEnteroEnRango(body.orden, 'orden', RANGO_ORDEN),
+    color: body.color === undefined || body.color === null || body.color === ''
+      ? null
+      : validarFormato(body.color, 'color', FORMATO_COLOR, 7)
   };
 }
 

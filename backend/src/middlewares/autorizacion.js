@@ -25,4 +25,12 @@ const exigirPermiso = (codigo) =>
     next();
   });
 
-module.exports = { exigirTipoAcceso, exigirPermiso };
+// Para un endpoint que hace dos cosas según el body (p. ej. guardar = crear o editar):
+// revisa el permiso con los que ya cargó exigirPermiso en la misma petición.
+function exigirPermisoCargado(req, codigo) {
+  if (!req.permisos || !req.permisos.includes(codigo)) {
+    throw new AppError(MSG.SIN_PERMISO, HTTP.PROHIBIDO);
+  }
+}
+
+module.exports = { exigirTipoAcceso, exigirPermiso, exigirPermisoCargado };

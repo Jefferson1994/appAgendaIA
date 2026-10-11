@@ -1,11 +1,12 @@
 const prisma = require('../shared/prisma');
 
-// Asignaciones (profesional + precio propio) de un servicio. Con profesionalId se limita a las de ese profesional.
+// Asignaciones (profesional + precio propio) y fotos de un servicio. Con profesionalId se limita a las de ese profesional.
 const incluirAsignaciones = (profesionalId) => ({
   profesionales: {
     where: { activo: true, ...(profesionalId ? { profesionalId } : {}) },
     include: { profesional: true }
-  }
+  },
+  fotos: { orderBy: { orden: 'asc' } }
 });
 
 function listar({ organizacionId, profesionalId, texto, incluirInactivos }, db = prisma) {
@@ -79,7 +80,28 @@ function listarProfesionalesActivos(organizacionId, ids = null, db = prisma) {
   });
 }
 
+// Profesionales activos de la empresa con su nombre (opciones del formulario de servicios).
+function listarProfesionalesParaAsignar(organizacionId, db = prisma) {
+  return db.profesional.findMany({
+    where: { organizacionId, activo: true },
+    select: { id: true, nombre: true, apellido: true, tipo: { select: { codigo: true, nombre: true } } },
+    orderBy: [{ nombre: 'asc' }, { apellido: 'asc' }]
+  });
+}
+
+// Debe ejecutarse dentro de una transacción: reemplaza las fotos por la lista dada, en ese orden.
+async function reemplazarFotos(servicioId, documentoIds, db = prisma) {
+  await db.servicioFoto.deleteMany({ where: { servicioId } });
+  if (documentoIds.length > 0) {
+    await db.servicioFoto.createMany({
+      data: documentoIds.map((documentoId, orden) => ({ servicioId, documentoId, orden }))
+    });
+  }
+}
+
 module.exports = {
+  listarProfesionalesParaAsignar,
+  reemplazarFotos,
   listar,
   buscarPorId,
   crear,

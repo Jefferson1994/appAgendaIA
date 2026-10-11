@@ -15,7 +15,7 @@ class CitaAgendaEB {
     this.HoraFin = fin.toFormat('HH:mm');
     this.DuracionMinutos = cita.duracionMinutos;
     this.Estado = cita.estado;
-    this.Precio = cita.precio;
+    this.Precio = Number(cita.precio);
     this.Notas = cita.notasCliente || null;
 
     this.Cliente = {
@@ -25,6 +25,11 @@ class CitaAgendaEB {
     };
     this.Servicio = { Id: cita.servicio.id, Nombre: cita.servicio.nombre };
     this.Profesional = { Id: cita.profesional.id, Nombre: nombreCompleto(cita.profesional) };
+    // Último cobro de la cita (anticipo o pago completo), si lo hay.
+    const pago = cita.pagos && cita.pagos[0];
+    this.Pago = pago
+      ? { Estado: pago.estado, MontoEsperado: Number(pago.montoEsperado), MontoRecibido: pago.montoRecibido === null ? null : Number(pago.montoRecibido) }
+      : null;
   }
 }
 

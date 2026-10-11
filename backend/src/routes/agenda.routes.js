@@ -8,11 +8,16 @@ const Paths = require('./paths/AgendaPaths');
 
 const router = express.Router();
 
-router.post(
-  Paths.CONSULTAR,
-  autenticar,
-  exigirPermiso(PERMISOS.CITAS_VER),
-  asyncHandler(AgendaController.consultar)
-);
+const ver = exigirPermiso(PERMISOS.CITAS_VER);
+const gestionar = exigirPermiso(PERMISOS.CITAS_GESTIONAR);
+
+router.use(autenticar);
+
+router.post(Paths.CONSULTAR, ver, asyncHandler(AgendaController.consultar));
+router.post(Paths.OPCIONES, ver, asyncHandler(AgendaController.opciones));
+router.post(Paths.DISPONIBILIDAD, gestionar, asyncHandler(AgendaController.disponibilidad));
+router.post(Paths.CLIENTES, gestionar, asyncHandler(AgendaController.buscarClientes));
+router.post(Paths.CREAR, gestionar, asyncHandler(AgendaController.crear));
+router.post(Paths.ESTADO, gestionar, asyncHandler(AgendaController.cambiarEstado));
 
 module.exports = router;

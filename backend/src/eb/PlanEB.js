@@ -11,6 +11,8 @@ class PlanEB {
     this.Moneda = plan.moneda;
     this.Periodicidad = plan.periodicidad;
     this.Orden = plan.orden;
+    // Tipo de negocio al que se ofrece; null = a todos.
+    this.Categoria = plan.categoria ? { Id: plan.categoria.id, Nombre: plan.categoria.nombre } : null;
     this.Activo = plan.activo;
     this.EsVigente = esVigente;
     this.Modulos = (plan.modulos || [])
