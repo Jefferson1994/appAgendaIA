@@ -204,7 +204,7 @@ Requisitos: Node.js 20 o superior, Docker Desktop.
 
 ```powershell
 cd backend
-docker compose up -d          # PostgreSQL en el puerto 5433
+docker compose up -d          # PostgreSQL (puerto 5434) y SeaweedFS (archivos, puerto 8888)
 npm install
 npx prisma generate
 npx prisma migrate deploy     # crea las tablas
@@ -217,13 +217,67 @@ Variables de entorno (`backend/.env`, no se sube a git):
 
 | Variable | Para qué |
 |---|---|
-| `DATABASE_URL` | Conexión a PostgreSQL (`postgresql://agendaia:...@localhost:5433/agendaia?schema=public`) |
+| `DATABASE_URL` | Conexión a PostgreSQL (`postgresql://agendaia:...@localhost:5434/agendaia?schema=public`) |
+| `SEAWEED_FILER_URL` | Filer de SeaweedFS donde se guardan los archivos (`http://127.0.0.1:8888`) |
+| `ALMACENAMIENTO_CARPETA` | Carpeta raíz dentro del filer (`agendaia`) |
+| `DOCUMENTO_MAX_MB` | Tamaño máximo de un archivo subido, en MB (por defecto 5) |
 | `PORT` | Puerto del servidor (por defecto 3000) |
 | `NODE_ENV` | `development` o `production`. En `production` el simulador de pagos no existe |
 | `MINUTOS_RESERVA` | Duración de la reserva temporal, entre 1 y 60 (por defecto 15) |
 | `PAGO_SIMULADOR_SECRETO` | Clave que debe enviar el webhook del simulador en el header `x-pago-simulador-secreto` |
 
 `node --watch` no recarga al cambiar el `.env`: reinicia el servidor a mano.
+
+### Archivos e imágenes (SeaweedFS)
+
+Las imágenes y documentos (QR de cobro, fotos de servicios, de profesionales e instalaciones y, más adelante, comprobantes de pago) no se guardan en PostgreSQL ni en la carpeta del proyecto: van a un contenedor de **SeaweedFS**. En la base solo queda el registro del archivo (tabla `documentos`: tipo, nombre, tamaño y `ruta`).
+
+**Levantarlo**
+
+```powershell
+cd backend
+docker compose up -d seaweedfs      # solo el almacenamiento (o docker compose up -d para todo)
+docker ps                           # debe aparecer agendaia_seaweedfs
+```
+
+En el `.env` del backend:
+
+```
+SEAWEED_FILER_URL=http://127.0.0.1:8888
+ALMACENAMIENTO_CARPETA=agendaia
+DOCUMENTO_MAX_MB=5
+```
+
+Reinicia el backend después de cambiar el `.env`.
+
+**Cómo se usa**
+
+- El front sube el archivo a `POST /documentos/subir` (con token). El backend revisa el tipo real del archivo (no solo la extensión), lo guarda en el filer en `agendaia/empresa-<id>/<tipo>/<año>/<mes>/<uuid>.<ext>` (los de la plataforma, en `agendaia/plataforma/...`) y devuelve el id del documento.
+- Para mostrarlo, el front pide `GET /documentos/:id/archivo` con token: el backend comprueba que el documento sea de la empresa del usuario y entrega el contenido.
+- El bot pide las imágenes que manda por WhatsApp (QR, fotos) por `GET /contexto/canal/:identificador/documentos/:documentoId`.
+- El navegador nunca habla directo con SeaweedFS: los puertos `8888` (filer) y `9333` (master) solo escuchan en `127.0.0.1`. Todo el código que toca los archivos está en `src/services/almacenamiento/AlmacenamientoService.js`; para cambiar a S3 u otro almacenamiento basta reemplazar ese archivo.
+
+**Revisarlo**
+
+- `http://localhost:9333`: panel del master (estado del volumen).
+- `http://localhost:8888/agendaia/`: lista de carpetas y archivos guardados (solo desde tu máquina).
+
+**Problemas comunes**
+
+| Síntoma | Causa |
+|---|---|
+| "El almacenamiento de archivos no está disponible. Intenta más tarde" al subir o ver una imagen | El contenedor no está corriendo o `SEAWEED_FILER_URL` está mal. Revisa `docker ps` y el `.env`. |
+| La imagen sale rota en la pantalla | El registro existe en `documentos` pero el archivo ya no está en SeaweedFS (por ejemplo, se borró el volumen). Vuelve a subirla. |
+| El archivo es rechazado | No es PNG/JPG (o PDF en comprobantes), o pesa más de `DOCUMENTO_MAX_MB`. |
+
+**Borrar todos los archivos** (solo en desarrollo): los archivos viven en el volumen `agendaia_seaweedfs_data`. `node prisma/limpiar-datos-empresas.js --confirmar` borra los registros de la base pero no los archivos; para dejarlo vacío:
+
+```powershell
+docker compose stop seaweedfs
+docker compose rm -f seaweedfs
+docker volume rm backend_agendaia_seaweedfs_data   # el prefijo es el nombre de la carpeta del compose; revísalo con: docker volume ls
+docker compose up -d seaweedfs
+```
 
 ---
 
