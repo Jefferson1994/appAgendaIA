@@ -781,9 +781,7 @@ async function licenciarTodoParaDesarrollo() {
   }
 }
 
-async function cargarSuperAdmin() {
-  console.log('3. Super administrador');
-
+function obtenerCredencialesSuperAdmin() {
   const email = (process.env.SUPERADMIN_EMAIL || '').trim().toLowerCase();
   const clave = process.env.SUPERADMIN_PASSWORD || '';
 
@@ -793,13 +791,18 @@ async function cargarSuperAdmin() {
     );
   }
 
+  return { email, clave };
+}
+
+async function cargarSuperAdmin({ email, clave }) {
+  console.log('3. Super administrador');
   const existente = await UsuariosRepository.buscarPorEmail(email);
   if (existente) {
     console.log(`   = ${email} ya existía (no se modifica)`);
     return;
   }
 
-    const passwordHash = await hashear(clave);
+  const passwordHash = await hashear(clave);
 
   await prisma.$transaction(async (tx) => {
     const persona = await PersonasRepository.crear(
@@ -822,6 +825,9 @@ async function cargarSuperAdmin() {
 }
 
 async function main() {
+  // Validar antes de escribir para no dejar una carga parcial si faltan credenciales.
+  const superAdmin = obtenerCredencialesSuperAdmin();
+
   console.log('\n=== SEED DE ACCESO ===\n');
   await cargarPermisos();
   await cargarRolesPlantilla();
@@ -835,7 +841,7 @@ async function main() {
   await cargarCategorias();
   await cargarPantallasDeRoles();
   await licenciarTodoParaDesarrollo();
-  await cargarSuperAdmin();
+  await cargarSuperAdmin(superAdmin);
   console.log('\n=== SEED DE ACCESO COMPLETADO ===\n');
 }
 

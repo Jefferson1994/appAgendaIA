@@ -45,6 +45,7 @@ enum MetodoPago {
 enum ProveedorPago {
   SIMULADOR
   PAYPHONE
+  MANUAL
 }
 
 enum EstadoPago {
@@ -76,6 +77,16 @@ enum EstadoConciliacion {
   REVISION_MANUAL
   APROBADA_MANUALMENTE
   RECHAZADA
+}
+
+enum ProveedorCalendario {
+  GOOGLE
+}
+
+enum EstadoSincronizacionCalendario {
+  PENDIENTE
+  SINCRONIZADO
+  ERROR
 }
 
 // =====================================================
@@ -191,6 +202,7 @@ model Profesional {
   canalesAtencion CanalAtencion[]
   usuarios        Usuario[]
   mediosCobro     MedioCobro[]
+  integracionCalendario IntegracionCalendario?
   fotos           RecursoFoto[]
   tipo            CatalogoItem          @relation("ProfesionalTipo", fields: [tipoId], references: [id])
 
@@ -418,6 +430,7 @@ model Cita {
   servicio     Servicio     @relation(fields: [servicioId], references: [id])
 
   pagos Pago[]
+  eventoCalendario EventoCalendario?
 
   @@index([profesionalId, fechaInicio, fechaFin])
   @@index([clienteId, fechaInicio])
@@ -444,7 +457,8 @@ model Pago {
 
   referenciaCobro            String        @unique @map("referencia_cobro") @db.VarChar(80)
   proveedor                  ProveedorPago @default(SIMULADOR)
-  referenciaProveedor        String?       @unique @map("referencia_proveedor") @db.VarChar(150)
+  referenciaProveedor          String?       @unique @map("referencia_proveedor") @db.VarChar(150)
+  referenciaSolicitudProveedor String?       @unique @map("referencia_solicitud_proveedor") @db.VarChar(30)
   urlPago                    String?       @map("url_pago") @db.VarChar(500)
   moneda                     String        @default("USD") @db.Char(3)
   porcentajeAnticipoAplicado Decimal?      @map("porcentaje_anticipo_aplicado") @db.Decimal(5, 2)
@@ -467,6 +481,47 @@ model Pago {
   @@index([citaId])
   @@index([estado])
   @@map("pagos")
+}
+
+// Conexión de un profesional con su calendario. El token se cifra antes de guardarse.
+model IntegracionCalendario {
+  id Int @id @default(autoincrement())
+
+  profesionalId       Int                 @unique @map("profesional_id")
+  proveedor           ProveedorCalendario @default(GOOGLE)
+  calendarId          String              @default("primary") @map("calendar_id") @db.VarChar(255)
+  refreshTokenCifrado String              @map("refresh_token_cifrado") @db.Text
+  activo              Boolean             @default(true)
+
+  fechaCreacion      DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion") @db.Timestamptz(6)
+
+  profesional Profesional       @relation(fields: [profesionalId], references: [id], onDelete: Cascade)
+  eventos     EventoCalendario[]
+
+  @@map("integraciones_calendario")
+}
+
+// Cada cita confirmada puede tener un único evento externo. Los fallos de sincronización no afectan el cobro.
+model EventoCalendario {
+  id Int @id @default(autoincrement())
+
+  citaId              Int                            @unique @map("cita_id")
+  integracionId       Int                            @map("integracion_id")
+  eventoExternoId     String?                        @unique @map("evento_externo_id") @db.VarChar(255)
+  estado              EstadoSincronizacionCalendario @default(PENDIENTE)
+  ultimoError         String?                        @map("ultimo_error") @db.Text
+  fechaSincronizacion DateTime?                      @map("fecha_sincronizacion") @db.Timestamptz(6)
+
+  fechaCreacion      DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion") @db.Timestamptz(6)
+
+  cita        Cita                  @relation(fields: [citaId], references: [id], onDelete: Cascade)
+  integracion IntegracionCalendario @relation(fields: [integracionId], references: [id], onDelete: Cascade)
+
+  @@index([integracionId])
+  @@index([estado])
+  @@map("eventos_calendario")
 }
 
 // =====================================================

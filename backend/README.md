@@ -200,34 +200,49 @@ y un webhook nuevo pasa la suscripción a `VIGENTE` al confirmar el pago.
 
 ## 6. Cómo levantarlo
 
-Requisitos: Node.js 20 o superior, Docker Desktop.
+Requisitos: Node.js 20 o superior y Docker Desktop.
+
+Desde `backend/`, prepara `.env` a partir de `.env.example`. Para la primera carga define al menos `DATABASE_URL`, `JWT_SECRET`, `SUPERADMIN_EMAIL` y `SUPERADMIN_PASSWORD`. La clave del superadministrador debe cumplir el mínimo indicado en el error del seed.
 
 ```powershell
 cd backend
-docker compose up -d          # PostgreSQL (puerto 5434) y SeaweedFS (archivos, puerto 8888)
-npm install
-npx prisma generate
-npx prisma migrate deploy     # crea las tablas
-node prisma/seed.js           # datos de prueba (Carlos)
-node prisma/seed-multitenant.js   # segundo profesional (Ana)
+docker compose up -d
+npm ci
+npm run db:generate
+npm run db:migrate
+npm run db:seed:acceso
+npm run db:check
 npm run dev                   # http://localhost:3000
 ```
+
+El seed de acceso es idempotente: crea permisos, roles, módulos, pantallas, catálogos, planes y el superadministrador solo si no existen. Valida primero las credenciales del superadministrador, así que no deja datos parciales cuando falta una variable.
+
+Para poblar **solo una base local de demostración** que vaya a usar el flujo de n8n, después del seed de acceso ejecuta:
+
+```powershell
+npm run db:seed:demo
+npm run db:seed:multitenant
+```
+
+`db:seed:demo` crea los datos de Carlos y `db:seed:multitenant` agrega a Ana y el canal `wa-ana-demo`. No los ejecutes sobre una base con datos reales. Para llenar la agenda de una organización concreta con citas ficticias se usa `npm run db:seed:agenda -- <organizacionId>`.
 
 Variables de entorno (`backend/.env`, no se sube a git):
 
 | Variable | Para qué |
 |---|---|
-| `DATABASE_URL` | Conexión a PostgreSQL (`postgresql://agendaia:...@localhost:5434/agendaia?schema=public`) |
-| `SEAWEED_FILER_URL` | Filer de SeaweedFS donde se guardan los archivos (`http://127.0.0.1:8888`) |
-| `ALMACENAMIENTO_CARPETA` | Carpeta raíz dentro del filer (`agendaia`) |
-| `DOCUMENTO_MAX_MB` | Tamaño máximo de un archivo subido, en MB (por defecto 5) |
-| `PORT` | Puerto del servidor (por defecto 3000) |
-| `NODE_ENV` | `development` o `production`. En `production` el simulador de pagos no existe |
-| `MINUTOS_RESERVA` | Duración de la reserva temporal, entre 1 y 60 (por defecto 15) |
-| `PAGO_SIMULADOR_SECRETO` | Clave que debe enviar el webhook del simulador en el header `x-pago-simulador-secreto` |
+| `DATABASE_URL` | Conexión a PostgreSQL local. Con el `docker-compose.yml` incluido usa el puerto `5433`: `postgresql://agendaia:...@localhost:5433/agendaia?schema=public`. |
+| `JWT_SECRET` | Firma de los tokens de sesión. Debe ser un valor aleatorio, largo y privado. |
+| `SUPERADMIN_EMAIL` | Correo de la cuenta inicial de plataforma que crea `db:seed:acceso`. |
+| `SUPERADMIN_PASSWORD` | Clave inicial de esa cuenta. No se guarda en el repositorio. |
+| `SEAWEED_FILER_URL` | Filer de SeaweedFS donde se guardan los archivos (`http://127.0.0.1:8888`). |
+| `ALMACENAMIENTO_CARPETA` | Carpeta raíz dentro del filer (`agendaia`). |
+| `DOCUMENTO_MAX_MB` | Tamaño máximo de un archivo subido, en MB (por defecto 5). |
+| `PORT` | Puerto del servidor (por defecto 3000). |
+| `NODE_ENV` | `development` o `production`. En `production` el simulador de pagos no existe. |
+| `MINUTOS_RESERVA` | Duración de la reserva temporal, entre 1 y 60 (por defecto 15). |
+| `PAGO_SIMULADOR_SECRETO` | Clave que debe enviar el webhook del simulador en el header `x-pago-simulador-secreto`. |
 
 `node --watch` no recarga al cambiar el `.env`: reinicia el servidor a mano.
-
 ### Archivos e imágenes (SeaweedFS)
 
 Las imágenes y documentos (QR de cobro, fotos de servicios, de profesionales e instalaciones y, más adelante, comprobantes de pago) no se guardan en PostgreSQL ni en la carpeta del proyecto: van a un contenedor de **SeaweedFS**. En la base solo queda el registro del archivo (tabla `documentos`: tipo, nombre, tamaño y `ruta`).
@@ -305,4 +320,4 @@ Los textos nuevos van a `config/mensajes.js` y los valores fijos a `config/const
 - **Seguridad:** limitador de peticiones, autenticación entre n8n y el backend (hoy `canal_id` llega en el cuerpo y no se verifica), y cifrado opcional de respuestas.
 - **n8n:** las expresiones de `resolver_contexto` usan `json.data...`. Para `POST /pagos/solicitar`, el backend expone tanto el formato estándar (`estado`, `data`) como los campos directos `ok`, `pago.id` y `pago.referenciaCobro`; el agente debe validar esos datos antes de informar que inició un cobro.
 - **Logs** en los services.
-- **Pasarela real** de pagos (PayPhone) en lugar del simulador.
+- **Interfaz administrativa de pagos:** el backend ya expone pagos manuales pendientes y confirmación manual; falta consumirla desde el frontend.

@@ -16,6 +16,7 @@ const { horarioEfectivo } = require('../utils/horarios');
 const AccesoService = require('./AccesoService');
 const CategoriasService = require('./CategoriasService');
 const DisponibilidadService = require('./DisponibilidadService');
+const CalendarioService = require('./CalendarioService');
 const PagosService = require('./PagosService');
 const AgendaRepository = require('../repositories/AgendaRepository');
 const BloqueosRepository = require('../repositories/BloqueosRepository');
@@ -249,6 +250,10 @@ async function cambiarEstado(usuario, { organizacionId, citaId, estado }) {
     await CitasRepository.actualizar(cita.id, { estado, ...(confirma ? { fechaExpiracionReserva: null } : {}) }, tx);
     if (confirma) await PagosRepository.confirmarPendientesDeCita(cita.id, new Date(), tx);
   }, TRANSACCION_OPCIONES);
+
+  if (estado === ESTADOS_CITA.CONFIRMADA) {
+    await CalendarioService.sincronizarCitaConfirmada(cita.id);
+  }
 
   return CitasRepository.buscarParaAgenda(cita.id, alcance.organizacionId);
 }

@@ -25,7 +25,7 @@ async function crearReservaTemporal({ canalId, clienteId, servicioId, fechaInici
   const zonaHoraria = profesional.zonaHoraria || organizacion.zonaHoraria || ZONA_HORARIA_DEFECTO;
   const fechaLocal = fechaInicio.setZone(zonaHoraria).toISODate();
 
-  return prisma.$transaction(async (tx) => {
+  const resultado = await prisma.$transaction(async (tx) => {
     // Solo una reserva a la vez por profesional.
     await BloqueosRepository.bloquearProfesional(tx, profesional.id);
 
@@ -121,6 +121,11 @@ async function crearReservaTemporal({ canalId, clienteId, servicioId, fechaInici
       pagoCreado: pago.creada
     };
   }, TRANSACCION_OPCIONES);
+
+  // El enlace PayPhone se crea cuando la reserva ya quedó persistida. Si el proveedor no
+  // responde, no se afirma éxito ni se pierde el bloqueo temporal del horario.
+  resultado.pago = await PagosService.completarSolicitudPago(resultado);
+  return resultado;
 }
 
 async function crearPagoAutomatico({ cita, servicio, db }) {

@@ -26,9 +26,11 @@ Backend Express + PostgreSQL + Prisma
 - Reservas temporales con vencimiento configurable, por defecto 15 minutos.
 - Protección transaccional y de PostgreSQL contra citas superpuestas.
 - Expiración coherente de `RESERVA_TEMPORAL`, `PENDIENTE_PAGO` y su solicitud de pago asociada.
-- Solicitudes de pago en modo simulador, con referencias únicas y webhook idempotente para pruebas locales.
+- Solicitudes de pago idempotentes: simulador local, enlaces únicos de PayPhone cuando está configurado y transferencias/efectivo con validación manual.
+- Webhook PayPhone que confirma el pago y la cita tras verificar comercio, referencia, monto e idempotencia.
+- Sincronización opcional de una cita confirmada con Google Calendar del profesional.
 
-La pasarela real, WhatsApp Cloud API, Google Calendar, recordatorios y el panel administrativo todavía no están integrados.
+WhatsApp Cloud API, recordatorios y la interfaz visual del panel administrativo siguen siendo las próximas capas del producto.
 
 ## Estructura
 
@@ -85,6 +87,13 @@ PORT=3000
 NODE_ENV=development
 MINUTOS_RESERVA=15
 PAGO_SIMULADOR_SECRETO=cambia-este-secreto-local
+PAYPHONE_TOKEN=
+PAYPHONE_STORE_ID=
+PAYPHONE_LINKS_URL=https://pay.payphonetodoesposible.com/api/Links
+GOOGLE_CALENDAR_CLIENT_ID=
+GOOGLE_CALENDAR_CLIENT_SECRET=
+GOOGLE_CALENDAR_REDIRECT_URI=http://localhost:3000/integraciones/google/callback
+CIFRADO_SECRET=usa-un-secreto-unico-en-produccion
 ```
 
 `MINUTOS_RESERVA` debe ser un entero entre 1 y 60. El simulador de pagos se desactiva automáticamente cuando `NODE_ENV=production`.
@@ -97,15 +106,15 @@ El archivo [n8n/workflow-agenda-ia.json](n8n/workflow-agenda-ia.json) correspond
 - `resolver_contexto`.
 - `AI Agent` con OpenAI.
 - Memoria con clave `canal_id:usuario_id`.
-- Herramientas `consultar_servicios`, `registrar_cliente`, `ver_disponibilidad`, `crear_reserva`, `solicitar_pago` y `consultar_estado_reserva`.
+- Herramientas `consultar_servicios`, `registrar_cliente`, `ver_disponibilidad`, `crear_reserva`, `solicitar_pago`, `reportar_pago_manual` y `consultar_estado_reserva`.
 
 Para restaurarlo en otra instancia, importa el JSON, asigna tu credencial de OpenAI al nodo correspondiente y publica el workflow. Las credenciales se exportan como referencias, nunca con su secreto. Después de editar el flujo en n8n, usa **More actions → Download** para sustituir esta plantilla por una nueva exportación antes de versionarla.
 
 `resolver_contexto` devuelve la respuesta estándar del backend en `data`. Por eso toda expresión de n8n que lea el canal, el profesional, la organización o el catálogo debe partir de `$('resolver_contexto').first().json.data`. El mensaje de sistema del agente se configura en modo **Expression** para insertar el catálogo real del canal antes de llamar al modelo.
 
-Cuando una reserva temporal requiere anticipo, el backend crea la solicitud de pago en la misma transacción y devuelve su resumen junto con la reserva. La herramienta `solicitar_pago` se mantiene como recuperación idempotente y responde con `ok: true`, `pago.id` numérico y `pago.referenciaCobro` no vacío. El agente solo puede informar que el cobro fue iniciado si el resultado devuelto contiene esos datos.
+Cuando una reserva temporal requiere anticipo, el backend crea la solicitud de pago dentro de la transacción y, después de confirmar la reserva, genera el enlace PayPhone fuera de la transacción. Así no mantiene bloqueado el horario esperando una red externa. El agente solo comparte un enlace cuando la respuesta contiene `pago.proveedor = PAYPHONE` y `pago.urlPago` HTTPS no vacío.
 
-El simulador sigue siendo exclusivamente de desarrollo: no muestra una URL de checkout ni admite transferencias reales.
+El simulador sigue siendo exclusivamente de desarrollo. Para transferencias o efectivo, el chat puede registrar el reporte, pero el profesional debe validarlo desde el panel antes de que la cita pase a `CONFIRMADA`.
 
 `POST /clientes` es la ruta actual para registrar clientes. `POST /leads` continúa disponible como alias de compatibilidad con integraciones anteriores.
 
@@ -177,8 +186,23 @@ Revisa estas tablas después de las pruebas:
 - `transacciones_bancarias`: cada `evento_id` recibido por el simulador.
 - `conciliaciones_pago`: asociación entre el pago y el evento.
 
-## Próximo paso: pasarela real
+## PayPhone, transferencias y calendario
 
-Cuando se elija el proveedor, se reemplazará el simulador por un adaptador específico que cree un checkout y valide la firma de sus webhooks. La verificación debe usar el evento firmado y el identificador externo del proveedor; un comprobante de transferencia enviado como imagen no confirma una cita.
+### PayPhone
+
+1. Solicita a PayPhone el token Bearer y el `storeId` de producción o pruebas.
+2. Configura `PAYPHONE_TOKEN` y `PAYPHONE_STORE_ID` en `backend/.env` y reinicia el backend. Mientras ambas variables estén vacías, el flujo conserva el simulador local.
+3. Configura en PayPhone una URL pública HTTPS para la notificación externa: `https://TU-DOMINIO/webhooks/pagos/payphone/NotificacionPago`. Para probar en local, expón el backend con un túnel HTTPS temporal.
+4. El chat creará una reserva, generará un enlace único y solo compartirá `urlPago` si PayPhone respondió correctamente. La notificación aprobada valida comercio, identificador único, monto e idempotencia antes de confirmar la cita.
+
+### Transferencia o efectivo
+
+El administrador configura sus cuentas en `/cobros/medios/guardar`, o cada profesional las suyas en `/cobros/mios/guardar`. Cuando el cliente elige transferencia, el chat muestra únicamente las cuentas activas devueltas por el backend. Al informar que pagó, el chat marca el pago como `COMPROBANTE_RECIBIDO`; el profesional revisa su banco o el efectivo y confirma desde el panel con `POST /pagos/manual/confirmar`. Esa acción registra la conciliación, confirma el pago y confirma la cita.
+
+### Google Calendar
+
+Configura un cliente OAuth de Google Calendar con el callback `GOOGLE_CALENDAR_REDIRECT_URI`. El profesional autenticado obtiene su URL de autorización con `POST /integraciones/google/autorizar`, completa la autorización y las citas que se confirmen después se crean o actualizan en su calendario. Si Google no está configurado o falla, el pago y la cita continúan siendo válidos: queda un registro de error para reintentar la sincronización.
+
+Antes de producción también se requiere autenticación entre n8n y el backend, validación de la firma de WhatsApp Cloud API y autorización para cualquier panel administrativo.
 
 Antes de producción también se requiere autenticación entre n8n y el backend, validación de la firma de WhatsApp Cloud API y autorización para cualquier panel administrativo.
