@@ -18,6 +18,8 @@ class ContextoEB {
       codigo: organizacion.codigo,
       nombre: organizacion.nombre,
       nombreComercial: organizacion.nombreComercial,
+      direccion: organizacion.direccion,
+      ciudad: organizacion.ciudad,
       zonaHoraria: organizacion.zonaHoraria,
       activo: organizacion.activo
     };

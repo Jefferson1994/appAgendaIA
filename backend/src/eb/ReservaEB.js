@@ -29,10 +29,13 @@ class ReservaEB {
       ? {
           id: pago.id,
           estado: pago.estado,
+          metodo: pago.metodo,
+          proveedor: pago.proveedor,
           referenciaCobro: pago.referenciaCobro,
           montoEsperado: Number(pago.montoEsperado),
           moneda: pago.moneda,
-          fechaExpiracion: pago.fechaExpiracion ? pago.fechaExpiracion.toISOString() : null
+          fechaExpiracion: pago.fechaExpiracion ? pago.fechaExpiracion.toISOString() : null,
+          urlPago: pago.urlPago || null
         }
       : null;
     this.pagoCreado = pagoCreado;

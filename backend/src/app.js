@@ -53,6 +53,8 @@ const recursosRoutes = require('./routes/recursos.routes');
 const empresaRoutes = require('./routes/empresa.routes');
 const EmpresaPaths = require('./routes/paths/EmpresaPaths');
 const RecursosPaths = require('./routes/paths/RecursosPaths');
+const integracionesRoutes = require('./routes/integraciones.routes');
+const IntegracionesPaths = require('./routes/paths/IntegracionesPaths');
 
 
 const app = express();
@@ -95,9 +97,7 @@ app.get('/health', (req, res) => res.json({
 app.use(PacientesPaths.BASE, pacientesRoutes);
 app.use(ClientesConsultaPaths.BASE, clientesConsultaRoutes);
 app.use(ClientesPaths.BASE, clientesRoutes);
-app.use(ClientesPaths.BASE, clientesRoutes);
 app.use(CatalogoServiciosPaths.BASE, serviciosCatalogoRoutes);
-app.use(ServiciosPaths.BASE, serviciosRoutes);
 app.use(ServiciosPaths.BASE, serviciosRoutes);
 app.use(DisponibilidadPaths.BASE, disponibilidadRoutes);
 app.use(ContextoPaths.BASE, contextoRoutes);
@@ -119,6 +119,7 @@ app.use(PerfilPaths.BASE, perfilRoutes);
 app.use(InicioPaths.BASE, inicioRoutes);
 app.use(RecursosPaths.BASE, recursosRoutes);
 app.use(EmpresaPaths.BASE, empresaRoutes);
+app.use(IntegracionesPaths.BASE, integracionesRoutes);
 
 // Debe ir al final de las rutas.
 app.use(errorHandler);

@@ -60,7 +60,7 @@ function citaOcupaHorario(cita, inicioSlot, finSlot, zonaHoraria, ahora) {
   return seSolapan(inicioSlot, finSlot, inicioCita, finCita);
 }
 
-function generarSlots({ intervalos, bloqueos, citas, duracionMinutos, intervaloMinutos, zonaHoraria, ahora }) {
+function generarSlots({ intervalos, bloqueos, citas, duracionMinutos, intervaloMinutos, zonaHoraria, ahora, horaPreferida }) {
   const slots = [];
 
   for (const intervalo of intervalos) {
@@ -76,6 +76,7 @@ function generarSlots({ intervalos, bloqueos, citas, duracionMinutos, intervaloM
 
       if (
         !esPasado &&
+        (!horaPreferida || cursor.toFormat('HH:mm') === horaPreferida) &&
         !bloqueos.some((b) => seSolapan(cursor, finSlot, b.inicio, b.fin)) &&
         !citas.some((c) => citaOcupaHorario(c, cursor, finSlot, zonaHoraria, ahora))
       ) {
@@ -109,6 +110,7 @@ function calcularDias({
   intervaloMinutos,
   zonaHoraria,
   ahora,
+  horaPreferida,
   horarios,
   excepciones,
   citas
@@ -131,7 +133,8 @@ function calcularDias({
         duracionMinutos,
         intervaloMinutos,
         zonaHoraria,
-        ahora
+        ahora,
+        horaPreferida
       })
     );
     if (slots.length === 0) continue;
