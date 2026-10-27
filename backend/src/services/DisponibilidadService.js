@@ -18,7 +18,7 @@ function limitarDias(dias) {
   return Math.min(Math.max(cantidad, DISPONIBILIDAD.DIAS_MIN), DISPONIBILIDAD.DIAS_MAX);
 }
 
-async function obtenerDisponibilidad({ profesionalId, servicioId, desde, dias, db = prisma }) {
+async function obtenerDisponibilidad({ profesionalId, servicioId, desde, dias, hora, db = prisma }) {
   const profesional = await ProfesionalesRepository.buscarActivoPorId(Number(profesionalId), db);
   if (!profesional) {
     throw new AppError(MSG.PROFESIONAL_NO_ENCONTRADO, HTTP.NO_ENCONTRADO);
@@ -78,7 +78,8 @@ async function obtenerDisponibilidad({ profesionalId, servicioId, desde, dias, d
     ahora,
     horarios,
     excepciones,
-    citas
+    citas,
+    horaPreferida: hora
   });
 
   return { profesional, servicio, precio, duracionMinutos, zonaHoraria, dias: diasConHorarios };

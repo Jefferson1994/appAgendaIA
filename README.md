@@ -86,6 +86,8 @@ DATABASE_URL="postgresql://USUARIO:PASSWORD@localhost:5433/agendaia?schema=publi
 PORT=3000
 NODE_ENV=development
 MINUTOS_RESERVA=15
+HORAS_PAGO_MANUAL=24
+HORAS_VALIDACION_PAGO_MANUAL=72
 PAGO_SIMULADOR_SECRETO=cambia-este-secreto-local
 PAYPHONE_TOKEN=
 PAYPHONE_STORE_ID=
@@ -197,7 +199,7 @@ Revisa estas tablas después de las pruebas:
 
 ### Transferencia o efectivo
 
-El administrador configura sus cuentas en `/cobros/medios/guardar`, o cada profesional las suyas en `/cobros/mios/guardar`. Cuando el cliente elige transferencia, el chat muestra únicamente las cuentas activas devueltas por el backend. Al informar que pagó, el chat marca el pago como `COMPROBANTE_RECIBIDO`; el profesional revisa su banco o el efectivo y confirma desde el panel con `POST /pagos/manual/confirmar`. Esa acción registra la conciliación, confirma el pago y confirma la cita.
+El administrador configura sus cuentas en `/cobros/medios/guardar`, o cada profesional las suyas en `/cobros/mios/guardar`. Cuando el cliente elige transferencia, el chat muestra únicamente las cuentas activas devueltas por el backend y concede `HORAS_PAGO_MANUAL` (24 por defecto) para pagar. Cuando informa que pagó, el pago queda `COMPROBANTE_RECIBIDO` y la reserva conserva el horario durante `HORAS_VALIDACION_PAGO_MANUAL` (72 por defecto), para que el profesional revise su banco o efectivo. Solo el profesional confirma desde el panel con `POST /pagos/manual/confirmar`; entonces se registra la conciliación y la cita pasa a `CONFIRMADA`.
 
 ### Google Calendar
 

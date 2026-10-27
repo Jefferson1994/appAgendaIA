@@ -17,7 +17,11 @@ const {
   ESTADOS_CONCILIACION,
   PUNTAJE_CONCILIACION
 } = require('../config/constantes');
-const { expirarReservasVencidas } = require('../shared/reservas');
+const {
+  expirarReservasVencidas,
+  calcularExpiracionPagoManual,
+  calcularExpiracionValidacionManual
+} = require('../shared/reservas');
 const { mismoMonto } = require('../utils/montos');
 const CanalesService = require('./CanalesService');
 const CobrosService = require('./CobrosService');
@@ -60,9 +64,9 @@ async function crearSolicitudPendienteParaCita(cita, db, metodo = METODO_PAGO.PA
         referenciaProveedor: null,
         referenciaBancaria: null
       }, db);
-      return { pago: pagoActualizado, creada: false, cita };
+      return { pago: pagoActualizado, creada: false, cita, metodoActualizado: true };
     }
-    return { pago: pagoVigente, creada: false, cita };
+    return { pago: pagoVigente, creada: false, cita, metodoActualizado: false };
   }
 
   const solicitud = calcularSolicitudCobro(cita);
@@ -82,7 +86,7 @@ async function crearSolicitudPendienteParaCita(cita, db, metodo = METODO_PAGO.PA
   const citaActualizada = cita.estado === ESTADOS_CITA.RESERVA_TEMPORAL
     ? await CitasRepository.actualizar(cita.id, { estado: ESTADOS_CITA.PENDIENTE_PAGO }, db)
     : cita;
-  return { pago, creada: true, cita: citaActualizada };
+  return { pago, creada: true, cita: citaActualizada, metodoActualizado: false };
 }
 
 async function prepararPagoPayphone(pago, cita) {
@@ -120,6 +124,15 @@ async function solicitarPago({ canalId, citaId, metodo = METODO_PAGO.PASARELA })
     return crearSolicitudPendienteParaCita(cita, tx, metodo);
   }, TRANSACCION_OPCIONES);
 
+  if (
+    (resultado.creada || resultado.metodoActualizado) &&
+    [METODO_PAGO.TRANSFERENCIA, METODO_PAGO.EFECTIVO].includes(resultado.pago.metodo)
+  ) {
+    const fechaExpiracion = calcularExpiracionPagoManual();
+    resultado.pago = await PagosRepository.actualizar(resultado.pago.id, { fechaExpiracion });
+    resultado.cita = await CitasRepository.actualizar(resultado.cita.id, { fechaExpiracionReserva: fechaExpiracion });
+  }
+
   const pago = await completarSolicitudPago(resultado);
   const mediosCobro = pago.metodo === METODO_PAGO.TRANSFERENCIA
     ? await CobrosService.mediosParaCanal(canal)
@@ -154,10 +167,14 @@ async function reportarPagoManual({ canalId, citaId, referenciaBancaria }) {
     if (!pendiente || ![METODO_PAGO.TRANSFERENCIA, METODO_PAGO.EFECTIVO].includes(pendiente.metodo)) {
       throw new AppError(MSG.PAGO_MANUAL_NO_ENCONTRADO, HTTP.CONFLICTO);
     }
-    return PagosRepository.actualizar(pendiente.id, {
+    const fechaExpiracion = calcularExpiracionValidacionManual();
+    const pagoActualizado = await PagosRepository.actualizar(pendiente.id, {
       estado: ESTADOS_PAGO.COMPROBANTE_RECIBIDO,
-      referenciaBancaria: referenciaBancaria || pendiente.referenciaBancaria
+      referenciaBancaria: referenciaBancaria || pendiente.referenciaBancaria,
+      fechaExpiracion
     }, tx);
+    await CitasRepository.actualizar(cita.id, { fechaExpiracionReserva: fechaExpiracion }, tx);
+    return pagoActualizado;
   }, TRANSACCION_OPCIONES);
   return pago;
 }
