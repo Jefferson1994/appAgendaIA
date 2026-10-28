@@ -7,6 +7,7 @@
 process.loadEnvFile();
 
 const { PrismaClient } = require('@prisma/client');
+const { CATALOGOS, TIPOS_RECURSO } = require('../src/config/constantes');
 
 const prisma = new PrismaClient();
 
@@ -26,6 +27,17 @@ const CANAL_ANA = 'wa-ana-demo';
 async function main() {
 
   console.log('');
+
+  const tipoPersona = await prisma.catalogoItem.findFirst({
+    where: {
+      codigo: TIPOS_RECURSO.PERSONA,
+      catalogo: { codigo: CATALOGOS.TIPOS_RECURSO }
+    }
+  });
+
+  if (!tipoPersona) {
+    throw new Error('Falta el catálogo TIPOS_RECURSO/PERSONA. Ejecuta primero npm run db:seed:acceso.');
+  }
   console.log('==============================================');
   console.log(' SEED MULTI-PROFESIONAL - AGENDA IA');
   console.log('==============================================');
@@ -182,6 +194,7 @@ async function main() {
     },
 
     update: {
+      tipo: { connect: { id: tipoPersona.id } },
       nombre: 'Ana',
 
       apellido: 'López',
@@ -203,7 +216,8 @@ async function main() {
     },
 
     create: {
-      organizacionId: organizacionAna.id,
+      organizacion: { connect: { id: organizacionAna.id } },
+      tipo: { connect: { id: tipoPersona.id } },
 
       codigo: 'odontologa-demo',
 

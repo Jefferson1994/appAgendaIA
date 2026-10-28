@@ -2,6 +2,31 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Bandeja durable de Meta: no se pierde la entrada al responder HTTP 200.
+// La conversación identifica número de destino + remitente verificado por Meta.
+model MetaMensaje {
+  id              String   @id @db.VarChar(255)
+  numeroId        String   @map("numero_id") @db.VarChar(40)
+  canalId         String   @map("canal_id") @db.VarChar(150)
+  remitente       String   @db.VarChar(30)
+  conversacion    String   @db.VarChar(100)
+  tipo            String   @db.VarChar(30)
+  texto           String?  @db.Text
+  medio           Json?
+  estado          String   @default("PENDIENTE") @db.VarChar(30)
+  respuesta       String?  @db.Text
+  partesEnviadas  Int      @default(0) @map("partes_enviadas")
+  idsSalida       Json?    @map("ids_salida")
+  ultimoError     String?  @map("ultimo_error") @db.VarChar(255)
+  leaseHasta      DateTime? @map("lease_hasta") @db.Timestamptz(6)
+  fechaCreacion   DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion") @db.Timestamptz(6)
+
+  @@index([estado, fechaCreacion])
+  @@index([conversacion, fechaCreacion])
+  @@map("meta_mensajes")
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")

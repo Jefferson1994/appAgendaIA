@@ -122,9 +122,7 @@ async function crearReservaTemporal({ canalId, clienteId, servicioId, fechaInici
     };
   }, TRANSACCION_OPCIONES);
 
-  // El enlace PayPhone se crea cuando la reserva ya quedó persistida. Si el proveedor no
-  // responde, no se afirma éxito ni se pierde el bloqueo temporal del horario.
-  resultado.pago = await PagosService.completarSolicitudPago(resultado);
+  // El enlace se crea solo si el cliente elige expresamente la pasarela.
   return resultado;
 }
 

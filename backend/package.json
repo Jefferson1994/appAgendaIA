@@ -15,7 +15,8 @@
     "db:seed:acceso": "node prisma/seed-acceso.js",
     "db:seed:demo": "node prisma/seed.js",
     "db:seed:multitenant": "node prisma/seed-multitenant.js",
-    "db:seed:agenda": "node prisma/seed-demo-agenda.js"
+    "db:seed:agenda": "node prisma/seed-demo-agenda.js",
+    "meta:check": "node scripts/meta-diagnostico.js"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

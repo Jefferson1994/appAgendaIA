@@ -3,6 +3,7 @@ require('dotenv').config();
 
 const app = require('./app');
 const prisma = require('./shared/prisma');
+const { iniciarIntegracionMeta, detenerIntegracionMeta } = require('./services/meta/MetaIntegracion');
 
 // =====================================================
 // ETAPA 4.3
@@ -26,6 +27,7 @@ async function iniciarServidor() {
 
     // 1. Conectar con PostgreSQL
     await prisma.$connect();
+    await iniciarIntegracionMeta();
 
     console.log(
       'Conexión a PostgreSQL establecida correctamente'
@@ -46,7 +48,7 @@ async function iniciarServidor() {
   } catch (error) {
 
     console.error(
-      'No fue posible conectar con PostgreSQL:',
+      'No fue posible iniciar el backend:',
       error
     );
 
@@ -69,6 +71,7 @@ async function cerrarAplicacion() {
 
   try {
 
+    await detenerIntegracionMeta();
     await prisma.$disconnect();
 
     console.log(

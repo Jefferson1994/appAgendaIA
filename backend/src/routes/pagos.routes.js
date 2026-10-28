@@ -10,6 +10,7 @@ const router = express.Router();
 
 // Herramientas del bot y confirmación de transferencia por el cliente.
 router.post(Paths.SOLICITAR, asyncHandler(PagosController.solicitar));
+router.get(Paths.OPCIONES, asyncHandler(PagosController.opciones));
 router.get(Paths.ESTADO, asyncHandler(PagosController.consultarEstado));
 router.post(Paths.MANUAL_REPORTAR, asyncHandler(PagosController.reportarManual));
 

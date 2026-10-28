@@ -10,12 +10,18 @@ const { ok } = require('../utils/respuesta');
 
 async function solicitar(req, res) {
   const datos = SolicitudPagoRequest.validarSolicitud(req.body);
-  const { pago, creada, mediosCobro } = await PagosService.solicitarPago(datos);
-  const payload = new PagoEB(pago, creada, mediosCobro);
+  const { pago, cita, creada, mediosCobro } = await PagosService.solicitarPago(datos);
+  const payload = new PagoEB({ ...pago, cita }, creada, mediosCobro);
   return res.status(creada ? HTTP.CREADO : HTTP.OK).json({
-    ok: true, creada: payload.creada, pago: payload.pago, estado: ESTADO.OK,
+    ok: true, creada: payload.creada, pago: payload.pago, cita: payload.cita, estado: ESTADO.OK,
     mensaje: creada ? MSG.PAGO_CREADO : MSG.PAGO_EXISTENTE, data: payload
   });
+}
+
+async function opciones(req, res) {
+  const { validarTexto } = require('../utils/validaciones');
+  const canalId = validarTexto(req.query.canal_id, 'canal_id');
+  return ok(res, await PagosService.consultarOpcionesPago(canalId), 'Opciones de pago obtenidas correctamente.');
 }
 
 async function consultarEstado(req, res) {
@@ -38,4 +44,4 @@ async function pendientesManual(req, res) {
   return ok(res, pagos.map((pago) => new PagoEB(pago, false)), MSG.PAGOS_MANUALES_OK);
 }
 
-module.exports = { solicitar, consultarEstado, reportarManual, confirmarManual, pendientesManual };
+module.exports = { solicitar, opciones, consultarEstado, reportarManual, confirmarManual, pendientesManual };

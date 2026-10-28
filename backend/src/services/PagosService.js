@@ -50,9 +50,32 @@ function proveedorPara(metodo) {
   return PROVEEDOR_PAGO.MANUAL;
 }
 
+function opcionesPasarela(canal) {
+  const payphone = PayphoneService.estaConfigurado() && process.env.PAYPHONE_CANAL_ID === canal.identificador;
+  const simulador = process.env.NODE_ENV === 'development' && Boolean(process.env.PAGO_SIMULADOR_SECRETO);
+  return { disponible: payphone || simulador, proveedor: payphone ? 'PAYPHONE' : simulador ? 'SIMULADOR' : null };
+}
+
+async function consultarOpcionesPago(canalId) {
+  const canal = await CanalesService.resolverCanalActivo(canalId);
+  const medios = (await CobrosService.mediosParaCanal(canal)).filter(m => m.tipo === 'TRANSFERENCIA');
+  return {
+    efectivo: { disponible: true, direccion: canal.organizacion.direccion || null },
+    transferencia: { disponible: medios.length > 0, plazoMaximoHoras: Math.min(Number(process.env.HORAS_PAGO_MANUAL || 24), 24) },
+    pasarela: opcionesPasarela(canal)
+  };
+}
+
+function limitarHastaCita(fecha, cita) {
+  return new Date(Math.min(fecha.getTime(), new Date(cita.fechaInicio).getTime()));
+}
+
 async function crearSolicitudPendienteParaCita(cita, db, metodo = METODO_PAGO.PASARELA) {
   const pagoVigente = await PagosRepository.buscarPendientePorCita(cita.id, db);
   if (pagoVigente) {
+    if (pagoVigente.metodo !== metodo && pagoVigente.urlPago) {
+      throw new AppError('Ya existe un enlace de pago activo. Contacta al profesional para cambiar el método.', HTTP.CONFLICTO);
+    }
     // Antes de reportar un pago el cliente puede cambiar de PayPhone a transferencia/efectivo
     // (o viceversa). Se mantiene la misma reserva y se invalida el enlace anterior.
     if (pagoVigente.metodo !== metodo && pagoVigente.estado === ESTADOS_PAGO.PENDIENTE) {
@@ -111,6 +134,15 @@ async function completarSolicitudPago({ pago, cita, servicio = null }) {
 
 async function solicitarPago({ canalId, citaId, metodo = METODO_PAGO.PASARELA }) {
   const canal = await CanalesService.resolverCanalActivo(canalId);
+  const mediosCobro = metodo === METODO_PAGO.TRANSFERENCIA
+    ? (await CobrosService.mediosParaCanal(canal)).filter(m => m.tipo === 'TRANSFERENCIA') : [];
+  if (metodo === METODO_PAGO.TRANSFERENCIA && !mediosCobro.length) {
+    throw new AppError(MSG.MEDIOS_COBRO_NO_CONFIGURADOS, HTTP.NO_DISPONIBLE);
+  }
+  const pasarela = opcionesPasarela(canal);
+  if (metodo === METODO_PAGO.PASARELA && !pasarela.disponible) {
+    throw new AppError('La pasarela de pago no está configurada para este canal.', HTTP.NO_DISPONIBLE);
+  }
   const resultado = await prisma.$transaction(async (tx) => {
     await BloqueosRepository.bloquearProfesional(tx, canal.profesionalId);
     await expirarReservasVencidas(tx, canal.profesionalId);
@@ -118,29 +150,41 @@ async function solicitarPago({ canalId, citaId, metodo = METODO_PAGO.PASARELA })
       { id: citaId, organizacionId: canal.organizacionId, profesionalId: canal.profesionalId }, tx
     );
     if (!cita) throw new AppError(MSG.CITA_NO_ENCONTRADA, HTTP.NO_ENCONTRADO);
-    if (cita.estado === ESTADOS_CITA.CONFIRMADA) throw new AppError(MSG.CITA_YA_CONFIRMADA, HTTP.CONFLICTO);
+    if (cita.estado === ESTADOS_CITA.CONFIRMADA) {
+      const anterior = await PagosRepository.buscarPendientePorCita(cita.id, tx);
+      if (metodo === METODO_PAGO.EFECTIVO && anterior?.metodo === METODO_PAGO.EFECTIVO) {
+        return { pago: anterior, cita, creada: false, citaConfirmada: false };
+      }
+      throw new AppError(MSG.CITA_YA_CONFIRMADA, HTTP.CONFLICTO);
+    }
     if (cita.estado === ESTADOS_CITA.EXPIRADA) throw new AppError(MSG.RESERVA_EXPIRADA, HTTP.CONFLICTO);
     if (!ESTADOS_RESERVA_EXPIRABLES.includes(cita.estado)) throw new AppError(MSG.CITA_NO_PUEDE_PAGAR, HTTP.CONFLICTO);
-    return crearSolicitudPendienteParaCita(cita, tx, metodo);
+    const solicitud = await crearSolicitudPendienteParaCita(cita, tx, metodo);
+    if (solicitud.pago.metodo !== metodo) throw new AppError('El pago ya fue reportado y no puede cambiarse de método.', HTTP.CONFLICTO);
+    if (metodo === METODO_PAGO.EFECTIVO) {
+      if (solicitud.pago.estado !== ESTADOS_PAGO.PENDIENTE) throw new AppError('El pago ya fue reportado y requiere revisión.', HTTP.CONFLICTO);
+      solicitud.pago = await PagosRepository.actualizar(solicitud.pago.id, {
+        montoEsperado: cita.precio, porcentajeAnticipoAplicado: 0, fechaExpiracion: null
+      }, tx);
+      solicitud.cita = await CitasRepository.actualizar(cita.id, {
+        estado: ESTADOS_CITA.CONFIRMADA, fechaExpiracionReserva: null
+      }, tx);
+      solicitud.citaConfirmada = true;
+    } else if (metodo === METODO_PAGO.TRANSFERENCIA && (solicitud.creada || solicitud.metodoActualizado)) {
+      const fechaExpiracion = limitarHastaCita(new Date(Math.min(calcularExpiracionPagoManual().getTime(), Date.now() + 24 * 60 * 60 * 1000)), cita);
+      solicitud.pago = await PagosRepository.actualizar(solicitud.pago.id, { fechaExpiracion }, tx);
+      solicitud.cita = await CitasRepository.actualizar(cita.id, { fechaExpiracionReserva: fechaExpiracion }, tx);
+    } else if (metodo === METODO_PAGO.PASARELA && solicitud.pago.proveedor !== pasarela.proveedor) {
+      solicitud.pago = await PagosRepository.actualizar(solicitud.pago.id, { proveedor: pasarela.proveedor }, tx);
+    }
+    return solicitud;
   }, TRANSACCION_OPCIONES);
-
-  if (
-    (resultado.creada || resultado.metodoActualizado) &&
-    [METODO_PAGO.TRANSFERENCIA, METODO_PAGO.EFECTIVO].includes(resultado.pago.metodo)
-  ) {
-    const fechaExpiracion = calcularExpiracionPagoManual();
-    resultado.pago = await PagosRepository.actualizar(resultado.pago.id, { fechaExpiracion });
-    resultado.cita = await CitasRepository.actualizar(resultado.cita.id, { fechaExpiracionReserva: fechaExpiracion });
+  if (resultado.citaConfirmada) {
+    await CalendarioService.sincronizarCitaConfirmada(resultado.cita.id).catch(() => {});
   }
-
-  const pago = await completarSolicitudPago(resultado);
-  const mediosCobro = pago.metodo === METODO_PAGO.TRANSFERENCIA
-    ? await CobrosService.mediosParaCanal(canal)
-    : [];
-  if (pago.metodo === METODO_PAGO.TRANSFERENCIA && mediosCobro.length === 0) {
-    throw new AppError(MSG.MEDIOS_COBRO_NO_CONFIGURADOS, HTTP.NO_DISPONIBLE);
-  }
-  return { pago, creada: resultado.creada, mediosCobro };
+  const pago = metodo === METODO_PAGO.PASARELA && pasarela.proveedor === 'PAYPHONE'
+    ? await completarSolicitudPago(resultado) : resultado.pago;
+  return { pago, cita: resultado.cita, creada: resultado.creada, mediosCobro };
 }
 
 async function consultarEstadoReserva({ canalId, citaId, telefono }) {
@@ -164,10 +208,11 @@ async function reportarPagoManual({ canalId, citaId, referenciaBancaria }) {
     const cita = await CitasRepository.buscarParaPago({ id: citaId, organizacionId: canal.organizacionId, profesionalId: canal.profesionalId }, tx);
     if (!cita) throw new AppError(MSG.CITA_NO_ENCONTRADA, HTTP.NO_ENCONTRADO);
     const pendiente = await PagosRepository.buscarPendientePorCita(cita.id, tx);
-    if (!pendiente || ![METODO_PAGO.TRANSFERENCIA, METODO_PAGO.EFECTIVO].includes(pendiente.metodo)) {
+    if (!pendiente || pendiente.metodo !== METODO_PAGO.TRANSFERENCIA) {
       throw new AppError(MSG.PAGO_MANUAL_NO_ENCONTRADO, HTTP.CONFLICTO);
     }
-    const fechaExpiracion = calcularExpiracionValidacionManual();
+    if (pendiente.estado === ESTADOS_PAGO.COMPROBANTE_RECIBIDO) return pendiente;
+    const fechaExpiracion = limitarHastaCita(calcularExpiracionValidacionManual(), cita);
     const pagoActualizado = await PagosRepository.actualizar(pendiente.id, {
       estado: ESTADOS_PAGO.COMPROBANTE_RECIBIDO,
       referenciaBancaria: referenciaBancaria || pendiente.referenciaBancaria,
@@ -239,6 +284,7 @@ async function listarPendientesManual(actor) {
 
 module.exports = {
   solicitarPago,
+  consultarOpcionesPago,
   consultarEstadoReserva,
   crearSolicitudPendienteParaCita,
   completarSolicitudPago,

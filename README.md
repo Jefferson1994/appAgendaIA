@@ -2,7 +2,7 @@
 
 Agenda IA es una plataforma SaaS multiempresa y multiprofesional para atender clientes por WhatsApp con IA, informar servicios, consultar disponibilidad real y gestionar citas sin mezclar los datos de cada profesional.
 
-Actualmente se prueba con Postman. El flujo está preparado para sustituir esa entrada por WhatsApp Cloud API sin cambiar el núcleo de reservas.
+Se puede probar con Postman y con WhatsApp Cloud API. El adaptador Meta recibe mensajes firmados en un puerto dedicado, los persiste en PostgreSQL y llama al chat existente de n8n. Configuración y límites: [backend/META-WHATSAPP.md](backend/META-WHATSAPP.md).
 
 ```text
 Postman / WhatsApp Cloud API
@@ -26,11 +26,11 @@ Backend Express + PostgreSQL + Prisma
 - Reservas temporales con vencimiento configurable, por defecto 15 minutos.
 - Protección transaccional y de PostgreSQL contra citas superpuestas.
 - Expiración coherente de `RESERVA_TEMPORAL`, `PENDIENTE_PAGO` y su solicitud de pago asociada.
-- Solicitudes de pago idempotentes: simulador local, enlaces únicos de PayPhone cuando está configurado y transferencias/efectivo con validación manual.
+- Solicitudes de pago idempotentes: simulador local, enlaces únicos de PayPhone cuando está configurado para el canal, transferencia con revisión manual y efectivo en la cita.
 - Webhook PayPhone que confirma el pago y la cita tras verificar comercio, referencia, monto e idempotencia.
 - Sincronización opcional de una cita confirmada con Google Calendar del profesional.
 
-WhatsApp Cloud API, recordatorios y la interfaz visual del panel administrativo siguen siendo las próximas capas del producto.
+WhatsApp Cloud API dispone de receptor, cola, envío de texto y recepción de comprobantes. Debe habilitarse con las credenciales de Meta y un webhook HTTPS. La pantalla de revisión de comprobantes y los recordatorios requieren su integración en el panel.
 
 ## Estructura
 
@@ -114,9 +114,9 @@ Para restaurarlo en otra instancia, importa el JSON, asigna tu credencial de Ope
 
 `resolver_contexto` devuelve la respuesta estándar del backend en `data`. Por eso toda expresión de n8n que lea el canal, el profesional, la organización o el catálogo debe partir de `$('resolver_contexto').first().json.data`. El mensaje de sistema del agente se configura en modo **Expression** para insertar el catálogo real del canal antes de llamar al modelo.
 
-Cuando una reserva temporal requiere anticipo, el backend crea la solicitud de pago dentro de la transacción y, después de confirmar la reserva, genera el enlace PayPhone fuera de la transacción. Así no mantiene bloqueado el horario esperando una red externa. El agente solo comparte un enlace cuando la respuesta contiene `pago.proveedor = PAYPHONE` y `pago.urlPago` HTTPS no vacío.
+Cuando una reserva temporal requiere anticipo, el backend crea una solicitud pendiente en la transacción. El chat consulta `GET /pagos/opciones` y presenta los métodos disponibles. Solo al elegir pasarela se intenta generar un enlace PayPhone fuera de la transacción. El agente comparte el enlace únicamente si el proveedor y la URL reales fueron devueltos.
 
-El simulador sigue siendo exclusivamente de desarrollo. Para transferencias o efectivo, el chat puede registrar el reporte, pero el profesional debe validarlo desde el panel antes de que la cita pase a `CONFIRMADA`.
+El simulador sigue siendo exclusivamente de desarrollo y no genera enlaces reales. En efectivo, la cita se confirma y el pago queda pendiente hasta el cobro presencial. Una transferencia reportada requiere validación del profesional antes de confirmar la cita.
 
 `POST /clientes` es la ruta actual para registrar clientes. `POST /leads` continúa disponible como alias de compatibilidad con integraciones anteriores.
 
@@ -199,7 +199,7 @@ Revisa estas tablas después de las pruebas:
 
 ### Transferencia o efectivo
 
-El administrador configura sus cuentas en `/cobros/medios/guardar`, o cada profesional las suyas en `/cobros/mios/guardar`. Cuando el cliente elige transferencia, el chat muestra únicamente las cuentas activas devueltas por el backend y concede `HORAS_PAGO_MANUAL` (24 por defecto) para pagar. Cuando informa que pagó, el pago queda `COMPROBANTE_RECIBIDO` y la reserva conserva el horario durante `HORAS_VALIDACION_PAGO_MANUAL` (72 por defecto), para que el profesional revise su banco o efectivo. Solo el profesional confirma desde el panel con `POST /pagos/manual/confirmar`; entonces se registra la conciliación y la cita pasa a `CONFIRMADA`.
+El administrador configura las cuentas de la empresa o de cada profesional. Al elegir transferencia, el cliente recibe los datos activos y tiene como máximo 24 horas, sin superar el inicio de la cita. Un comprobante recibido pasa a revisión manual y extiende la reserva hasta `HORAS_VALIDACION_PAGO_MANUAL`, sin superar el inicio de la cita. Solo al confirmar manualmente el pago se confirma la cita. Al elegir efectivo, se confirma la cita y el pago total queda pendiente para cobrarlo presencialmente.
 
 ### Google Calendar
 

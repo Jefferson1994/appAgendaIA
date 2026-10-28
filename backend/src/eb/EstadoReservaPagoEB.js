@@ -13,6 +13,7 @@ class EstadoReservaPagoEB {
       ? {
           id: pago.id,
           estado: pago.estado,
+          metodo: pago.metodo,
           proveedor: pago.proveedor,
           referenciaCobro: pago.referenciaCobro,
           montoEsperado: Number(pago.montoEsperado),
