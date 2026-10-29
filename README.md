@@ -120,6 +120,80 @@ El simulador sigue siendo exclusivamente de desarrollo y no genera enlaces reale
 
 `POST /clientes` es la ruta actual para registrar clientes. `POST /leads` continúa disponible como alias de compatibilidad con integraciones anteriores.
 
+## Crear una aplicación de Meta y probar WhatsApp en desarrollo
+
+Esta guía permite que cada desarrollador configure su propia aplicación de prueba de Meta y la conecte a su instalación local de Agenda IA. Los nombres de los menús pueden variar si Meta cambia su interfaz. La aplicación de Meta se configura en el **navegador del computador**; WhatsApp en el teléfono se usa para enviar y recibir los mensajes de prueba.
+
+### 1. Crear la aplicación y el portafolio
+
+1. Entra en [Meta for Developers](https://developers.facebook.com/apps/) con tu cuenta de Meta y selecciona **Create app**.
+2. En **App details**, escribe un nombre, por ejemplo `Agenda IA - Desarrollo`, y tu correo de contacto. Pulsa **Next**.
+3. En **Use cases**, selecciona **Connect with customers through WhatsApp** y pulsa **Next**.
+4. En **Business**, elige el portafolio empresarial que corresponda. Si no tienes uno, usa **Create a business portfolio**, completa el nombre y los datos de contacto y créalo. Si Meta ofrece **Verify later**, puedes posponer la verificación para comenzar las pruebas; esto no elimina requisitos posteriores de publicación.
+5. Selecciona el portafolio creado, continúa por **Requirements**, revisa el resumen y pulsa **Create app**. Si Meta solicita contraseña o verificación de seguridad, complétala en Meta.
+
+### 2. Obtener el número y enviar el primer mensaje
+
+1. En el panel de la aplicación, abre **Use cases** y personaliza **Connect on WhatsApp**. Selecciona el portafolio y pulsa **Continue** si aparece esa opción.
+2. En **Basic setup → Step 1. Try it out**, Meta proporciona un **test number**, su **Phone Number ID** y un **Messaging account ID** o identificador de la cuenta de WhatsApp Business (WABA). Guarda los identificadores: cada desarrollador usará los de su propia cuenta.
+3. Pulsa **Generate token** y completa el diálogo de autorización de Meta. Este **access token** permite llamar a la API y es temporal; si vence, genera otro y actualízalo localmente.
+4. En **Recipient**, añade o selecciona el número personal con WhatsApp. Sigue el proceso de verificación que indique Meta; usa el formato internacional, por ejemplo el prefijo `+593` para Ecuador. El número de prueba de Meta y el número personal son distintos.
+5. Selecciona la plantilla ofrecida, por ejemplo **Order Confirmation**, y pulsa **Send message**. Recibirla en el teléfono comprueba el envío de Meta, pero todavía no demuestra que Agenda IA responda.
+6. Obtén el **App secret** en **App settings → Basic → App secret → Show**; Meta puede solicitar tu contraseña. Es distinto del access token.
+
+No pegues el token ni el App secret en el README, capturas, Git o conversaciones. Si se expusieron, revócalos o regénéralos en Meta y actualiza la configuración local.
+
+### 3. Preparar Agenda IA y asociar el número con un profesional
+
+1. Instala las dependencias y aplica las migraciones siguiendo **Inicio local**. Mantén PostgreSQL, SeaweedFS y n8n en ejecución. Importa y publica el [workflow de n8n](n8n/workflow-agenda-ia.json), con su credencial de OpenAI asignada.
+2. Asegúrate de que exista un canal de atención activo asociado a la organización y al profesional de prueba. Usa el `canal_id` real de tu base de datos; los datos de demostración pueden variar entre instalaciones.
+3. En `backend/.env`, añade o completa estos valores, cada uno en su propia línea. Sustituye los marcadores por tus datos, sin incluir los signos `<` y `>`:
+
+```env
+META_WHATSAPP_ENABLED=true
+META_WHATSAPP_ACCESS_TOKEN=<TOKEN_DE_META>
+META_WHATSAPP_APP_SECRET=<APP_SECRET_DE_META>
+META_WHATSAPP_VERIFY_TOKEN=<CADENA_ALEATORIA_PROPIA>
+META_WHATSAPP_CHANNEL_MAP={"<PHONE_NUMBER_ID>":"<CANAL_ID_ACTIVO>"}
+META_WHATSAPP_API_VERSION=v25.0
+META_WHATSAPP_WEBHOOK_HOST=127.0.0.1
+META_WHATSAPP_WEBHOOK_PORT=3002
+META_WHATSAPP_N8N_URL=http://127.0.0.1:5678/webhook/chat-agenda
+```
+
+`PHONE_NUMBER_ID` es el identificador numérico que muestra Meta para su número de prueba; no es el número telefónico visible ni el WABA ID. `CANAL_ID_ACTIVO` identifica el canal de Agenda IA, por ejemplo `wa-fredy-demo` solo si existe en tu base. El verify token lo eliges tú: genera una cadena aleatoria de al menos 32 caracteres con `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` y guárdala localmente. Usa la versión de Graph API compatible indicada por Meta; el ejemplo corresponde a la configuración actual del proyecto.
+
+4. Inicia el backend con `npm run dev` desde `backend`. Debe mostrar que el receptor de Meta está disponible en el puerto `3002`. No inicies una segunda instancia si ya hay una ejecutándose en el puerto `3000`.
+5. En otra terminal, desde `backend`, ejecuta `npm run meta:check`. Este diagnóstico revisa la configuración y las conexiones sin mostrar los secretos ni enviar mensajes.
+
+### 4. Configurar el webhook público de prueba
+
+1. Instala y configura [ngrok](https://ngrok.com/download) si todavía no lo tienes. Con el backend activo, abre otra terminal y ejecuta:
+
+```powershell
+ngrok http 3002
+```
+
+2. Copia la dirección HTTPS que muestra ngrok y añade `/webhooks/whatsapp`. Por ejemplo: `https://TU-DOMINIO.ngrok-free.dev/webhooks/whatsapp`. Mantén abierta la terminal del túnel. Expón únicamente el puerto `3002`, no los puertos internos `3000` o `5678`.
+3. En Meta, entra en **Basic setup → Step 2. Production setup → Configure Webhooks**. Aunque el menú se llame Production setup, aquí se configura el receptor usado en esta prueba.
+4. En **Callback URL**, pega la URL HTTPS completa. En **Verify token**, escribe exactamente el mismo valor de `META_WHATSAPP_VERIFY_TOKEN` de tu archivo `.env`. Pulsa **Verify and save**.
+5. En **Webhook fields**, comprueba que **messages** aparezca como **Subscribed**. Además, la aplicación debe estar suscrita a la WABA de prueba: la suscripción del campo y la de la cuenta son pasos distintos. Si no recibes eventos, consulta [Subscribe to a WABA en la colección oficial de Meta](https://www.postman.com/meta/whatsapp-business-platform/request/26gui66/subscribe-to-a-waba) y, usando tu propio token autorizado, envía en Postman un `POST` a `https://graph.facebook.com/<VERSION>/<WABA_ID>/subscribed_apps`, con autorización **Bearer Token** y sin incluir el token en la URL. Una respuesta `success: true` indica que se aceptó la suscripción.
+6. Meta puede mostrar un aviso sobre limitaciones de aplicaciones no publicadas. Trabaja con el número y destinatarios de prueba y comprueba qué permite el panel de tu aplicación; esta guía no implica publicar ni pasar a producción.
+
+El botón **Test / Send to server** envía un evento de ejemplo al webhook: no envía un mensaje real al teléfono ni prueba toda la conversación. El callback de ngrok puede cambiar al reiniciarlo; actualízalo en Meta y verifica de nuevo si cambia.
+
+### 5. Probar la conversación completa
+
+1. Confirma que Docker, PostgreSQL, SeaweedFS, n8n, backend y ngrok sigan activos y que `npm run meta:check` no indique errores.
+2. En el teléfono cuyo número verificaste en Meta, abre el mensaje de prueba recibido y responde **Hola** al número de prueba. El mensaje debe llegar al backend, pasar por n8n y responder por WhatsApp con el contexto del profesional asociado al canal.
+3. Pide un servicio, elige una fecha y un horario disponible y proporciona los datos solicitados. Comprueba las opciones de pago que estén habilitadas para ese profesional. El simulador no produce un enlace real de PayPhone.
+4. Revisa la cita y el pago en la base de datos o en el panel. Efectivo confirma la cita y deja el pago pendiente; transferencia requiere comprobante y validación manual. El receptor admite imágenes JPG/PNG y PDF cuando existe una transferencia pendiente inequívoca; la pantalla de revisión de comprobantes todavía debe integrarse en el frontend.
+
+Si no hay respuesta, revisa que el túnel y ambos servicios sigan activos, que el token no haya vencido, que `messages` y la aplicación estén suscritos y que el mapa apunte al canal correcto. Consulta la tabla `meta_mensajes` y la sección de diagnóstico de [backend/META-WHATSAPP.md](backend/META-WHATSAPP.md). Antes de repetir una reserva, verifica si ya se creó; un error de envío no significa que la operación anterior no haya ocurrido.
+
+Esta configuración es para pruebas locales. La incorporación de profesionales reales requiere autorización y gestión segura de sus cuentas, una URL HTTPS estable y los requisitos de Meta aplicables; el mapa y token global actuales no constituyen aún un proceso completo de incorporación multiempresa. Referencia: [documentación oficial de WhatsApp Cloud API de Meta](https://www.postman.com/meta/whatsapp-business-platform/documentation/wlk6lh4/whatsapp-cloud-api).
+
+
 ## Flujo de reserva y pago simulado
 
 1. El agente registra o recupera al cliente.
